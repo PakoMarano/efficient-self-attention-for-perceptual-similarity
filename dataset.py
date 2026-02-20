@@ -1,7 +1,4 @@
-# Copyied from https://github.com/ssundaram21/dreamsim/blob/main/dataset/dataset.py
-
 from torch.utils.data import Dataset
-from utils.utils import get_preprocess_fn
 from torchvision import transforms
 import pandas as pd
 import numpy as np
@@ -9,17 +6,25 @@ from PIL import Image
 import os
 
 
+def _get_preprocess_fn(load_size, interpolation):
+    t = transforms.Compose([
+        transforms.Resize((load_size, load_size), interpolation=interpolation),
+        transforms.ToTensor()
+    ])
+    return lambda pil_img: t(pil_img.convert("RGB"))
+
+
 class TwoAFCDataset(Dataset):
     def __init__(self, root_dir: str, split: str = "train", load_size: int = 224,
                  interpolation: transforms.InterpolationMode = transforms.InterpolationMode.BICUBIC,
-                 preprocess: str = "DEFAULT", **kwargs):
+                 **kwargs):
         self.root_dir = root_dir
         self.csv = pd.read_csv(os.path.join(self.root_dir, "data.csv"))
         self.csv = self.csv[self.csv['votes'] >= 6] # Filter out triplets with less than 6 unanimous votes
         self.split = split
         self.load_size = load_size
         self.interpolation = interpolation
-        self.preprocess_fn = get_preprocess_fn(preprocess, self.load_size, self.interpolation)
+        self.preprocess_fn = _get_preprocess_fn(self.load_size, self.interpolation)
         
         if self.split == "train" or self.split == "val" or self.split == "test":
             self.csv = self.csv[self.csv["split"] == split]
