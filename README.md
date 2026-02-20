@@ -1,8 +1,9 @@
 # Efficient Self Attention for Perceptual Similarity
 Master thesis work on efficient self attention mechanisms for computing perceptual similarity between images (MSc in Computer Engineering Sapienza)
 
-Informations about the NIGHTS dataset and instructions on how to download it can be found in the [Dreamsim repository](https://github.com/ssundaram21/dreamsim/tree/main/dataset).
-Part of the code has been adapted from the code in the [Dreamsim repository](https://github.com/ssundaram21/dreamsim/tree/main).
+- Informations about the NIGHTS dataset and instructions on how to download it can be found in the [Dreamsim repository](https://github.com/ssundaram21/dreamsim/tree/main/dataset).
+- Part of the code has been adapted from the code in the [Dreamsim repository](https://github.com/ssundaram21/dreamsim/tree/main).
+- The code for efficient modules has been implemented from scratch and thus maybe very different than the original implemetations. Anyway these are the papers in which the original models have been introduced: [SRA](https://arxiv.org/abs/2102.12122), [Pool](https://arxiv.org/abs/2111.11418), [MoH](https://arxiv.org/abs/2410.11842), [SOFT](https://arxiv.org/abs/2110.11945).
 
 ## Evaluation
 
@@ -12,12 +13,12 @@ Run 2AFC evaluation on NIGHTS test split:
 python evaluation.py --dataset_root ./nights --split test --device cuda
 ```
 
-Quick subset evaluation (for fast checks):
+Minimal toy example (CPU, runs in seconds):
 
 ```bash
-python evaluation.py --dataset_root ./nights --split test --max_samples 128 --max_batches 8
+python evaluation.py --dataset_root ./nights --split test --device cpu --max_samples 16 --max_batches 1 --batch_size 4 --warmup_batches 1
 ```
 
 Notes:
-- `--impl` is accepted and logged, but is currently a no-op.
+- `--attention_module` selects the ViT attention backend; `benchmark` keeps standard multi-head attention.
 - Results are appended to `./reports/results.csv` by default.

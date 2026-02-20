@@ -8,6 +8,7 @@ import torch.nn.modules.utils as nn_utils
 from torch import nn
 
 from .vision_transformer import DINOHead
+from ..efficient_modules import apply_attention_module, validate_attention_module
 
 """
 Simplified extractor for DINO ViT-B/16 only.
@@ -28,7 +29,7 @@ class ViTExtractor(nn.Module):
     """
 
     def __init__(self, model_type: str = 'dino_vitb16', stride: int = 4, load_dir: str = "./models",
-                 device: str = 'cuda'):
+                 device: str = 'cuda', attention_module: str = "benchmark"):
         """
         :param model_type: A string specifying the type of model to extract from.
                           [dino_vits8 | dino_vits16 | dino_vitb8 | dino_vitb16 | vit_small_patch8_224 |
@@ -40,10 +41,12 @@ class ViTExtractor(nn.Module):
         super(ViTExtractor, self).__init__()
         self.model_type = model_type
         self.device = device
+        self.attention_module = validate_attention_module(attention_module)
         self.model = ViTExtractor.create_model(model_type, load_dir)
         if type(self.model) is tuple:
             self.proj = self.model[1]
             self.model = self.model[0]
+        apply_attention_module(self.model, self.attention_module)
         self.model = ViTExtractor.patch_vit_resolution(self.model, stride=stride).eval().to(self.device)
         self.p = self.model.patch_embed.patch_size
         if type(self.p) is tuple:

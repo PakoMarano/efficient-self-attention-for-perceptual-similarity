@@ -1,5 +1,6 @@
 nights/*
 reports/*
+models/*
 
 __pycache__/
 *.pyc

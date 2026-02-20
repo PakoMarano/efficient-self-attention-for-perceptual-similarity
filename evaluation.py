@@ -53,6 +53,7 @@ def eval_2afc(
     measured_batches = 0
     model_time = 0.0
 
+    # Warmup loop to stabilize performance and memory usage
     with torch.no_grad():
         iterator = iter(dataloader)
         for _ in range(min(warmup_batches, len(dataloader))):
@@ -72,6 +73,7 @@ def eval_2afc(
         torch.cuda.synchronize()
         torch.cuda.reset_peak_memory_stats()
 
+    # Main evaluation loop
     with torch.no_grad():
         for ref, left, right, pref_right, _ in dataloader:
             if max_batches is not None and measured_batches >= max_batches:
@@ -128,7 +130,7 @@ def run_evaluation(
     warmup_batches: int = 10,
     max_batches: Optional[int] = None,
     max_samples: Optional[int] = None,
-    impl: str = "benchmark",
+    attention_module: str = "benchmark",
     results_csv: str = "./reports/results.csv",
 ):
     dataloader = create_dataloader(
@@ -146,6 +148,7 @@ def run_evaluation(
         cache_dir=cache_dir,
         normalize_embeds=normalize_embeds,
         use_patch_model=use_patch_model,
+        attention_module=attention_module,
     )
 
     metrics = eval_2afc(
@@ -158,7 +161,7 @@ def run_evaluation(
 
     record = {
         "split": split,
-        "impl": impl,
+        "attention_module": attention_module,
         "device": device,
         "batch_size": batch_size,
         "num_workers": num_workers,
@@ -179,7 +182,7 @@ def run_evaluation(
     log_result(results_csv, record)
 
     print(
-        f"split={split}, impl={impl}: "
+        f"split={split}, attention_module={attention_module}: "
         f"acc={metrics['accuracy_2afc']:.4f}, "
         f"{metrics['img_per_sec']:.1f} img/s, "
         f"max_mem={metrics['max_mem_mb']:.1f} MB"
@@ -201,7 +204,7 @@ def parse_args():
     parser.add_argument("--warmup_batches", type=int, default=10)
     parser.add_argument("--max_batches", type=int, default=None)
     parser.add_argument("--max_samples", type=int, default=None)
-    parser.add_argument("--impl", type=str, default="benchmark")
+    parser.add_argument("--attention_module", type=str, default="benchmark")
     parser.add_argument("--use_patch_model", action="store_true")
     parser.add_argument("--no_pretrained", action="store_true")
     parser.add_argument("--no_normalize_embeds", action="store_true")
@@ -225,7 +228,7 @@ def main():
         warmup_batches=args.warmup_batches,
         max_batches=args.max_batches,
         max_samples=args.max_samples,
-        impl=args.impl,
+        attention_module=args.attention_module,
         results_csv=args.results_csv,
     )
 

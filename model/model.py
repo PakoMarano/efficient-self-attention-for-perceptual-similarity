@@ -1,7 +1,6 @@
 import json
 import os
 import zipfile
-from packaging import version
 
 import torch
 import torch.nn.functional as F
@@ -12,12 +11,13 @@ from peft import PeftModel, LoraConfig, get_peft_model
 from .constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .feature_extraction.extractor import ViTExtractor
 from .config import dreamsim_args, dreamsim_weights
+from .efficient_modules import validate_attention_module
 
 
 class PerceptualModel(torch.nn.Module):
     def __init__(self, model_type: str = "dino_vitb16", feat_type: str = "cls", stride: int = 16,
                  load_dir: str = "./models", normalize_embeds: bool = False,
-                 device: str = "cuda"):
+                 device: str = "cuda", attention_module: str = "benchmark"):
         """ Initializes a perceptual model that returns the perceptual distance between two image tensors.
         Extracts features from a DINO ViT-B/16 model.
 
@@ -29,6 +29,8 @@ class PerceptualModel(torch.nn.Module):
         :param stride: Stride of first convolution layer (should match patch size, typically 16).
         :param load_dir: Path to pretrained ViT checkpoints.
         :param normalize_embeds: If True, normalizes embeddings (i.e. divides by norm and subtracts mean).
+        :param device: Device for model (e.g., 'cuda' or 'cpu').
+        :param attention_module: Attention backend for ViT blocks. 'benchmark' keeps standard MHA.
         """
         super().__init__()
         assert model_type == "dino_vitb16", f"Only dino_vitb16 is supported, got {model_type}"
@@ -39,9 +41,16 @@ class PerceptualModel(torch.nn.Module):
         self.is_patch = feat_type == "cls_patch"
         self.normalize_embeds = normalize_embeds
         self.device = device
+        self.attention_module = validate_attention_module(attention_module)
         
         # Initialize single extractor
-        self.extractor = ViTExtractor(model_type, stride, load_dir, device=device)
+        self.extractor = ViTExtractor(
+            model_type,
+            stride,
+            load_dir,
+            device=device,
+            attention_module=self.attention_module,
+        )
         
         # Get extraction function
         self.extract_fn = self._get_extract_fn(feat_type)
@@ -160,7 +169,7 @@ def download_weights(cache_dir, use_patch_model=False):
 
 
 def dreamsim(pretrained: bool = True, device="cuda", cache_dir="./models", normalize_embeds: bool = True,
-             use_patch_model: bool = False):
+             use_patch_model: bool = False, attention_module: str = "benchmark"):
     """ Initializes the DreamSim model with dino_vitb16 backbone. When first called, downloads/caches model weights.
 
     :param pretrained: If True, downloads and loads DreamSim weights.
@@ -168,6 +177,7 @@ def dreamsim(pretrained: bool = True, device="cuda", cache_dir="./models", norma
     :param cache_dir: Location for downloaded weights.
     :param normalize_embeds: If True, normalizes embeddings (i.e. divides by norm and subtracts mean).
     :param use_patch_model: If True, uses model trained with CLS and patch features, otherwise just CLS.
+    :param attention_module: Attention backend for ViT blocks. 'benchmark' keeps standard MHA.
     :return:
         - PerceptualModel with DreamSim settings and weights.
         - Preprocessing function that converts a PIL image to a (1, 3, 224, 224) tensor with values [0-1].
@@ -183,7 +193,8 @@ def dreamsim(pretrained: bool = True, device="cuda", cache_dir="./models", norma
         **dreamsim_args['model_config'][config_key], 
         device=device, 
         load_dir=cache_dir,
-        normalize_embeds=normalize_embeds
+        normalize_embeds=normalize_embeds,
+        attention_module=attention_module,
     )
 
     # Setup LoRA configuration
