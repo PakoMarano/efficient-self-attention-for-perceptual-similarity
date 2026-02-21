@@ -3,3 +3,5 @@ pandas
 pillow
 torch
 torchvision
+timm
+peft
