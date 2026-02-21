@@ -1,15 +1,22 @@
+# Dataset and outputs
 nights/*
 reports/*
 models/*
 
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
 .ipynb_checkpoints
 
+# Model files
 *.pt
 *.pth
 *.onnx
 *.tflite
 
+# IDE and environment
 .vscode/
 .env
+.DS_Store

@@ -17,6 +17,8 @@ class MoHAttention(nn.Module):
             topk_heads: Number of heads to keep (default: 4 out of 12)
         """
         super().__init__()
+        if topk_heads <= 0:
+            raise ValueError("topk_heads must be > 0")
         self.num_heads = original_attention.num_heads
         self.scale = original_attention.scale
         self.topk_heads = min(topk_heads, self.num_heads)

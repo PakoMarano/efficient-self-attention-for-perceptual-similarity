@@ -16,6 +16,8 @@ class SRAAttention(nn.Module):
             reduction_ratio: Spatial reduction factor for K and V (default: 4)
         """
         super().__init__()
+        if reduction_ratio <= 0:
+            raise ValueError("reduction_ratio must be > 0")
         self.num_heads = original_attention.num_heads
         self.scale = original_attention.scale
         self.reduction_ratio = reduction_ratio
@@ -38,7 +40,7 @@ class SRAAttention(nn.Module):
         B, H, N, D = k.shape
         S = int(N ** 0.5)
         
-        if S * S != N:
+        if S * S != N or S < self.reduction_ratio or (S % self.reduction_ratio != 0):
             # Cannot reshape to square grid, return original
             return k, v
         

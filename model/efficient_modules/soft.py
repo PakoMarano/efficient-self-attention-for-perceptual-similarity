@@ -18,6 +18,10 @@ class SOFTAttention(nn.Module):
             num_newton_iterations: Number of Newton-Raphson iterations for matrix inverse (default: 6)
         """
         super().__init__()
+        if reduction_ratio <= 0:
+            raise ValueError("reduction_ratio must be > 0")
+        if num_newton_iterations <= 0:
+            raise ValueError("num_newton_iterations must be > 0")
         self.num_heads = original_attention.num_heads
         self.head_dim = original_attention.qkv.in_features // original_attention.num_heads
         self.reduction_ratio = reduction_ratio
@@ -93,7 +97,7 @@ class SOFTAttention(nn.Module):
         B, H, N, D = x.shape
         S = int(N ** 0.5)
         
-        if S * S != N:
+        if S * S != N or S < self.reduction_ratio or (S % self.reduction_ratio != 0):
             # Cannot reshape to square grid, return original
             return x
         

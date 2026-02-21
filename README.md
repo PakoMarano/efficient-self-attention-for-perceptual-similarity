@@ -1,9 +1,9 @@
 # Efficient Self Attention for Perceptual Similarity
 Master thesis work on efficient self attention mechanisms for computing perceptual similarity between images (MSc in Computer Engineering Sapienza)
 
-- Informations about the NIGHTS dataset and instructions on how to download it can be found in the [Dreamsim repository](https://github.com/ssundaram21/dreamsim/tree/main/dataset).
+- Informations about the NIGHTS dataset can be found in the [Dreamsim repository](https://github.com/ssundaram21/dreamsim/tree/main/dataset).
 - Part of the code has been adapted from the code in the [Dreamsim repository](https://github.com/ssundaram21/dreamsim/tree/main).
-- The code for efficient modules has been implemented from scratch and thus maybe very different than the original implemetations. Anyway these are the papers in which the original models have been introduced: [SRA](https://arxiv.org/abs/2102.12122), [Pool](https://arxiv.org/abs/2111.11418), [MoH](https://arxiv.org/abs/2410.11842), [SOFT](https://arxiv.org/abs/2110.11945).
+- The code for efficient modules has been implemented from scratch and thus maybe very different than the original implemetations. Anyway, these are the papers in which the original attention models have been introduced: [SRA](https://arxiv.org/abs/2102.12122), [Pool](https://arxiv.org/abs/2111.11418), [MoH](https://arxiv.org/abs/2410.11842), [SOFT](https://arxiv.org/abs/2110.11945).
 
 ## Setup
 
