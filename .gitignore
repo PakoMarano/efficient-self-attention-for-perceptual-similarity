@@ -2,6 +2,7 @@
 nights/*
 reports/*
 models/*
+training/embeddings/*
 
 # Python
 __pycache__/
