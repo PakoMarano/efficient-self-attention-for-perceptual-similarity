@@ -134,7 +134,7 @@ class PerceptualModel(torch.nn.Module):
         return transforms.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)(img)
 
 
-def download_weights(cache_dir, use_patch_model=False):
+def download_weights(cache_dir, use_patch_model=False, attention_module: str = "benchmark"):
     """
     Downloads and unzips DreamSim weights for dino_vitb16.
     
@@ -143,9 +143,10 @@ def download_weights(cache_dir, use_patch_model=False):
     """
     model_type = "dino_vitb16_patch" if use_patch_model else "dino_vitb16"
     
+    use_lora = attention_module != "pool"
     dreamsim_required_ckpts = {
-        "dino_vitb16": ["dino_vitb16_pretrain.pth", "dino_vitb16_single_lora"],
-        "dino_vitb16_patch": ["dino_vitb16_pretrain.pth", "dino_vitb16_patch_lora"],
+        "dino_vitb16": ["dino_vitb16_pretrain.pth"] + (["dino_vitb16_single_lora"] if use_lora else []),
+        "dino_vitb16_patch": ["dino_vitb16_pretrain.pth"] + (["dino_vitb16_patch_lora"] if use_lora else []),
     }
 
     def check(path):
@@ -184,9 +185,15 @@ def dreamsim(pretrained: bool = True, device="cuda", cache_dir="./models", norma
     """
     # Determine model configuration
     config_key = "dino_vitb16_patch" if use_patch_model else "dino_vitb16"
+    attention_module = validate_attention_module(attention_module)
+    use_lora = attention_module != "pool"
     
     # Download weights if needed
-    download_weights(cache_dir=cache_dir, use_patch_model=use_patch_model)
+    download_weights(
+        cache_dir=cache_dir,
+        use_patch_model=use_patch_model,
+        attention_module=attention_module,
+    )
 
     # Initialize PerceptualModel
     model = PerceptualModel(
@@ -197,18 +204,19 @@ def dreamsim(pretrained: bool = True, device="cuda", cache_dir="./models", norma
         attention_module=attention_module,
     )
 
-    # Setup LoRA configuration
-    lora_tag = 'dino_vitb16_patch_lora' if use_patch_model else 'dino_vitb16_single_lora'
-    with open(os.path.join(cache_dir, lora_tag, 'adapter_config.json'), 'r') as f:
-        adapter_config = json.load(f)
-    lora_keys = ['r', 'lora_alpha', 'lora_dropout', 'bias', 'target_modules']
-    lora_config = LoraConfig(**{k: adapter_config[k] for k in lora_keys})
-    model = get_peft_model(model, lora_config)
+    # Setup LoRA configuration (disabled for lightweight pool mode)
+    if use_lora:
+        lora_tag = 'dino_vitb16_patch_lora' if use_patch_model else 'dino_vitb16_single_lora'
+        with open(os.path.join(cache_dir, lora_tag, 'adapter_config.json'), 'r') as f:
+            adapter_config = json.load(f)
+        lora_keys = ['r', 'lora_alpha', 'lora_dropout', 'bias', 'target_modules']
+        lora_config = LoraConfig(**{k: adapter_config[k] for k in lora_keys})
+        model = get_peft_model(model, lora_config)
 
-    # Load pretrained weights if requested
-    if pretrained:
-        load_dir = os.path.join(cache_dir, lora_tag)
-        model = PeftModel.from_pretrained(model.base_model.model, load_dir).to(device)
+        # Load pretrained adapter weights if requested
+        if pretrained:
+            load_dir = os.path.join(cache_dir, lora_tag)
+            model = PeftModel.from_pretrained(model.base_model.model, load_dir).to(device)
 
     model.eval().requires_grad_(False)
 
