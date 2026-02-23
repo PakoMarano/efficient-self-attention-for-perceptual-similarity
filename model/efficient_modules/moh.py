@@ -97,8 +97,9 @@ class MoHAttention(nn.Module):
         y_selected = (attn_selected @ v_selected)  # (B, topk, N, D)
         
         # Create full output with zeros for pruned heads
+        # Use y_selected.dtype to handle autocast (mixed precision)
         y_full = torch.zeros(B, self.num_heads, N, C // self.num_heads, 
-                            device=x.device, dtype=x.dtype)
+                            device=y_selected.device, dtype=y_selected.dtype)
         y_full[:, head_indices, :, :] = y_selected
         
         # Reshape and project
@@ -108,7 +109,7 @@ class MoHAttention(nn.Module):
         
         # Create sparse attention tensor (with zeros for pruned heads)
         attn_full = torch.zeros(B, self.num_heads, N, N, 
-                               device=x.device, dtype=x.dtype)
+                               device=attn_selected.device, dtype=attn_selected.dtype)
         attn_full[:, head_indices, :, :] = attn_selected
         
         return x_out, attn_full
