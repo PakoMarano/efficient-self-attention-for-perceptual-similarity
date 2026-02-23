@@ -38,12 +38,17 @@ class PoolAttention(nn.Module):
         return pooled_patches
 
     def forward(self, x: torch.Tensor):
+        """
+        Forward pass returns pooled tokens (not delta).
+        The Block's residual connection handles: x_out = x_in + pool(norm(x_in))
+        """
         cls_token, patch_tokens = x[:, :1], x[:, 1:]
 
         pooled_patches = self._pool_patch_tokens(patch_tokens)
-        diff_patches = pooled_patches - patch_tokens
-        cls_delta = torch.zeros_like(cls_token)
-        y = torch.cat([cls_delta, diff_patches], dim=1)
+        
+        # Return pooled result directly (Block adds residual: x + pool(norm(x)))
+        # CLS token passes through unchanged
+        y = torch.cat([cls_token, pooled_patches], dim=1)
 
         return y, None
 
