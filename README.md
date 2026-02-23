@@ -45,7 +45,7 @@ Notes:
 Run embedding extraction on NIGHTS:
 
 ```bash
-python -m training.embedding --dataset_root ./nights --split test --device cuda --output_path ./training/embeddings/nights_test.pt
+python -m training.embedding --dataset_root ./nights --split all --device cuda --output_path ./training/embeddings/nights.pt
 ```
 
 Minimal toy example (CPU, runs in seconds):
