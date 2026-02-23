@@ -9,11 +9,11 @@ class SRAAttention(nn.Module):
     Reduces spatial dimensions of K and V using average pooling to decrease computational cost.
     """
     
-    def __init__(self, original_attention: nn.Module, reduction_ratio: int = 4):
+    def __init__(self, original_attention: nn.Module, reduction_ratio: int = 2):
         """
         Args:
             original_attention: The original Attention module to copy parameters from
-            reduction_ratio: Spatial reduction factor for K and V (default: 4)
+            reduction_ratio: Spatial reduction factor for K and V (default: 2)
         """
         super().__init__()
         if reduction_ratio <= 0:
@@ -127,13 +127,13 @@ class SRAAttention(nn.Module):
         return x_out, attn
 
 
-def build_attention(original_attention: nn.Module, reduction_ratio: int = 4, **_kwargs) -> nn.Module:
+def build_attention(original_attention: nn.Module, reduction_ratio: int = 2, **_kwargs) -> nn.Module:
     """
     Builder function for SRA attention module.
     
     Args:
         original_attention: The standard Attention module to replace
-        reduction_ratio: Spatial reduction factor (default: 4)
+        reduction_ratio: Spatial reduction factor (default: 2, compatible with 14x14 patches)
     Returns:
         SRAAttention module with copied parameters
     """
