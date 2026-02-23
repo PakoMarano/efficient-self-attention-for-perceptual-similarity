@@ -39,16 +39,20 @@ class PoolAttention(nn.Module):
 
     def forward(self, x: torch.Tensor):
         """
-        Forward pass returns pooled tokens (not delta).
+        Forward pass: spatial pool for patches, global average pool for CLS.
+        This gives CLS token a path to "see" the image content.
         The Block's residual connection handles: x_out = x_in + pool(norm(x_in))
         """
         cls_token, patch_tokens = x[:, :1], x[:, 1:]
 
+        # Spatial pooling for patches
         pooled_patches = self._pool_patch_tokens(patch_tokens)
         
-        # Return pooled result directly (Block adds residual: x + pool(norm(x)))
-        # CLS token passes through unchanged
-        y = torch.cat([cls_token, pooled_patches], dim=1)
+        # Global average pooling for CLS (adapts MetaFormer to ViT structure)
+        # CLS gets updated with global mean: cls_out = cls_in + mean(norm(patches))
+        global_avg_patches = patch_tokens.mean(dim=1, keepdim=True)  # [B, 1, C]
+        
+        y = torch.cat([global_avg_patches, pooled_patches], dim=1)
 
         return y, None
 
