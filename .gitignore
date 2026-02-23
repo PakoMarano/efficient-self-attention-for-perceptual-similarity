@@ -17,6 +17,10 @@ __pycache__/
 *.onnx
 *.tflite
 
+# Docker
+.dockerignore
+docker-compose.override.yml
+
 # IDE and environment
 .vscode/
 .env
