@@ -39,3 +39,21 @@ python evaluation.py --dataset_root ./nights --split test --device cpu --max_sam
 Notes:
 - `--attention_module` selects the ViT attention backend; `benchmark` keeps standard multi-head attention.
 - Results are appended to `./reports/results.csv` by default.
+
+## Embedding Extraction
+
+Run embedding extraction on NIGHTS:
+
+```bash
+python -m training.embedding --dataset_root ./nights --split test --device cuda --output_path ./training/embeddings/nights_test.pt
+```
+
+Minimal toy example (CPU, runs in seconds):
+
+```bash
+python -m training.embedding --dataset_root ./nights --split test --device cpu --max_samples 16 --max_batches 1 --batch_size 4 --warmup_batches 1 --output_path ./training/embeddings/nights_toy.pt
+```
+
+Notes:
+- Embeddings are saved to `--output_path` as a `.pt` file with tensors and run metadata.
+- Run logs are appended to `./reports/embedding_runs.csv` by default.
