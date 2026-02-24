@@ -309,7 +309,7 @@ def run_distillation(
 
     use_cuda = device.startswith("cuda") and torch.cuda.is_available()
     amp_device = "cuda" if use_cuda else "cpu"
-    scaler = torch.amp.GradScaler(enabled=use_cuda)
+    scaler = torch.cuda.amp.GradScaler(enabled=use_cuda)
 
     optimizer = torch.optim.AdamW(
         [p for p in model.parameters() if p.requires_grad],
