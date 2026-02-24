@@ -57,3 +57,31 @@ python -m training.embedding --dataset_root ./nights --split test --device cpu -
 Notes:
 - Embeddings are saved to `--output_path` as a `.pt` file with tensors and run metadata.
 - Run logs are appended to `./reports/embedding_runs.csv` by default.
+
+## Knowledge Distillation
+
+Distill the pool attention model using teacher embeddings from the benchmark (LoRA-finetuned DINO) model:
+
+```bash
+python -m training.distill_pool --teacher_embeddings ./training/embeddings/nights.pt --train_split train --val_split val --epochs 50 --batch_size 32 --device cuda
+```
+
+Enable optional 2AFC evaluation every N epochs (e.g., every 25 epochs):
+
+```bash
+python -m training.distill_pool --teacher_embeddings ./training/embeddings/nights.pt --train_split train --val_split val --epochs 50 --batch_size 32 --device cuda --eval_2afc_every 25 --eval_2afc_split val
+```
+
+Minimal toy example (CPU, runs in seconds):
+
+```bash
+python -m training.distill_pool --teacher_embeddings ./training/embeddings/nights_toy.pt --dataset_root ./nights --device cpu --epochs 1 --batch_size 4 --max_batches 1 --val_max_batches 1 --warmup_batches 1 --train_split test --val_split test
+```
+
+Notes:
+- By default, only MLP and LayerNorm parameters are unfrozen and trained.
+- Best model is saved to `./training/checkpoints/pool_distill_best.pt`.
+- Per-epoch checkpoints are saved to `./training/checkpoints/pool_distill_epoch_N.pt` (controlled by `--save_every`, default: 1).
+- Training uses cosine embedding loss by default; use `--loss_type mse` for MSE loss.
+- Each epoch computes validation loss and cosine similarity on the val split embeddings.
+- Run logs are appended to `./reports/distill_runs.csv` by default.
