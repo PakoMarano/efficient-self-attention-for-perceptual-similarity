@@ -1,3 +1,6 @@
+from typing import Dict, Iterable, List, Optional
+
+import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 import pandas as pd
@@ -12,6 +15,25 @@ def _get_preprocess_fn(load_size, interpolation):
         transforms.ToTensor()
     ])
     return lambda pil_img: t(pil_img.convert("RGB"))
+
+
+def load_split_paths(root_dir: str, split: str) -> Iterable[str]:
+    csv_path = os.path.join(root_dir, "data.csv")
+    df = pd.read_csv(csv_path)
+    df = df[df["votes"] >= 6]
+
+    if split not in {"train", "val", "test", "test_imagenet", "test_no_imagenet"}:
+        raise ValueError(f"Invalid split: {split}")
+
+    if split == "test_imagenet":
+        df = df[(df["split"] == "test") & (df["is_imagenet"] == True)]
+    elif split == "test_no_imagenet":
+        df = df[(df["split"] == "test") & (df["is_imagenet"] == False)]
+    else:
+        df = df[df["split"] == split]
+
+    paths = set(df["ref_path"]).union(df["left_path"]).union(df["right_path"])
+    return paths
 
 
 class TwoAFCDataset(Dataset):
@@ -112,3 +134,45 @@ class SingleImageDataset(Dataset):
         rel_path = row['path']
         img = self.preprocess_fn(Image.open(os.path.join(self.root_dir, rel_path)))
         return img, rel_path, int(row['id']), row['role']
+
+
+class DistillImageDataset(Dataset):
+    def __init__(
+        self,
+        dataset_root: str,
+        split: str,
+        img_size: int,
+        teacher_map: Dict[str, torch.Tensor],
+        unique_only: bool = True,
+        allowed_paths: Optional[Iterable[str]] = None,
+    ) -> None:
+        self.base = SingleImageDataset(
+            root_dir=dataset_root,
+            split=split,
+            load_size=img_size,
+            unique_only=unique_only,
+        )
+        self.teacher_map = teacher_map
+        allowed_set = set(allowed_paths) if allowed_paths is not None else None
+
+        indices: List[int] = []
+        if allowed_set is not None and len(allowed_set) == 0:
+            self.indices = []
+            return
+        for idx in range(len(self.base)):
+            path = self.base.images.iloc[idx]["path"]
+            if path not in self.teacher_map:
+                continue
+            if allowed_set is not None and path not in allowed_set:
+                continue
+            indices.append(idx)
+        self.indices = indices
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+    def __getitem__(self, idx: int):
+        base_idx = self.indices[idx]
+        img, rel_path, sample_id, role = self.base[base_idx]
+        teacher_embed = self.teacher_map[rel_path]
+        return img, teacher_embed, rel_path, sample_id, role
