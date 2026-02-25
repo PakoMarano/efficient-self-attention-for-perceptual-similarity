@@ -1,5 +1,6 @@
 # Dataset and outputs
 nights/*
+imagenet-100/*
 reports/*
 models/*
 training/embeddings/*
@@ -10,6 +11,8 @@ __pycache__/
 *$py.class
 *.so
 .ipynb_checkpoints
+.venv/
+venv/
 
 # Model files
 *.pt
