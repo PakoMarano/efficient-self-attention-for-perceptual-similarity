@@ -1,6 +1,6 @@
 import argparse
 import os
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set
 
 import torch
 from torch.utils.data import DataLoader, Subset
@@ -18,12 +18,16 @@ def create_single_image_dataloader(
     num_workers: int = 0,
     max_samples: Optional[int] = None,
     unique_only: bool = True,
+    extra_image_roots: Optional[Sequence[str]] = None,
+    include_extra_images: bool = False,
 ) -> DataLoader:
     dataset = SingleImageDataset(
         root_dir=dataset_root,
         split=split,
         load_size=img_size,
         unique_only=unique_only,
+        extra_image_roots=extra_image_roots,
+        include_extra_images=include_extra_images,
     )
 
     if max_samples is not None:
@@ -136,6 +140,7 @@ def run_embedding_extraction(
     max_samples: Optional[int] = None,
     attention_module: str = "benchmark",
     unique_only: bool = True,
+    extra_image_roots: Optional[Sequence[str]] = None,
     results_csv: str = "./reports/embedding_runs.csv",
 ) -> Dict[str, Any]:
     dataloader = create_single_image_dataloader(
@@ -146,6 +151,8 @@ def run_embedding_extraction(
         num_workers=num_workers,
         max_samples=max_samples,
         unique_only=unique_only,
+        extra_image_roots=extra_image_roots,
+        include_extra_images=bool(extra_image_roots),
     )
 
     model, _ = dreamsim(
@@ -185,6 +192,7 @@ def run_embedding_extraction(
             "max_batches": max_batches,
             "max_samples": max_samples,
             "unique_only": unique_only,
+            "extra_image_roots": list(extra_image_roots) if extra_image_roots else [],
         },
     }
     torch.save(payload, output_path)
@@ -202,6 +210,7 @@ def run_embedding_extraction(
         "max_batches": max_batches,
         "max_samples": max_samples,
         "unique_only": unique_only,
+        "extra_image_roots": "|".join(extra_image_roots) if extra_image_roots else "",
         "output_path": output_path,
         "samples": extraction["samples"],
         "batches": extraction["batches"],
@@ -231,6 +240,7 @@ def parse_args():
     parser.add_argument("--max_batches", type=int, default=None)
     parser.add_argument("--max_samples", type=int, default=None)
     parser.add_argument("--attention_module", type=str, default="benchmark")
+    parser.add_argument("--extra_image_roots", type=str, nargs="*", default=None)
     parser.add_argument("--use_patch_model", action="store_true")
     parser.add_argument("--no_pretrained", action="store_true")
     parser.add_argument("--no_normalize_embeds", action="store_true")
@@ -257,6 +267,7 @@ def main():
         max_samples=args.max_samples,
         attention_module=args.attention_module,
         unique_only=not args.keep_duplicates,
+        extra_image_roots=args.extra_image_roots,
         results_csv=args.results_csv,
     )
 

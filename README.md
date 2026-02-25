@@ -12,7 +12,7 @@ Master's thesis project on efficient self-attention mechanisms for perceptual im
 ## Resources and Credits
 
 - NIGHTS dataset info and download instructions are available in the [DreamSim repository](https://github.com/ssundaram21/dreamsim/tree/main/dataset).
-- ImageNet-100 dataset info and download instructions are available on [Hugging Face](https://huggingface.co/datasets/clane9/imagenet-100).
+- ImageNet-100 dataset info and download instructions are available on [Hugging Face](https://huggingface.co/datasets/ilee0022/ImageNet100).
 - Part of this codebase is adapted from [DreamSim](https://github.com/ssundaram21/dreamsim/tree/main).
 - Efficient attention modules in this repository are implemented from scratch and may differ from the original papers: [SRA](https://arxiv.org/abs/2102.12122), [Pool](https://arxiv.org/abs/2111.11418), [MoH](https://arxiv.org/abs/2410.11842), [SOFT](https://arxiv.org/abs/2110.11945).
 
@@ -49,10 +49,22 @@ python evaluation.py --dataset_root ./nights --split test --device cpu --max_sam
 
 ## Embedding Extraction
 
+If you downloaded ImageNet100 from Hugging Face (parquet shards), convert it once to image folders:
+
+```bash
+python ./scripts/convert_imagenet100_from_parquet.py --dataset_root ./imagenet-100 --output_root ./imagenet-100-images --splits train validation test
+```
+
 Extract embeddings on NIGHTS:
 
 ```bash
 python -m training.embedding --dataset_root ./nights --split all --device cuda --output_path ./training/embeddings/nights.pt
+```
+
+Extract embeddings on NIGHTS + ImageNet100:
+
+```bash
+python -m training.embedding --dataset_root ./nights --split all --device cuda --extra_image_roots ./imagenet-100-images --output_path ./training/embeddings/nights_imagenet100.pt
 ```
 
 ## Knowledge Distillation
@@ -61,4 +73,10 @@ Distill the pool attention model using teacher embeddings from the benchmark (Lo
 
 ```bash
 python -m training.distill_pool --teacher_embeddings ./training/embeddings/nights.pt --train_split train --val_split val --epochs 50 --batch_size 32 --device cuda --eval_2afc_every 25 --eval_2afc_split val
+```
+
+Distill with extra ImageNet100 images in train split (val remains NIGHTS-only):
+
+```bash
+python -m training.distill_pool --teacher_embeddings ./training/embeddings/nights_imagenet100.pt --train_split train --val_split val --epochs 100 --batch_size 64 --num_workers 4 --device cuda --extra_image_roots ./imagenet-100-images --eval_2afc_every 20 --eval_2afc_split val
 ```
