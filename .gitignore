@@ -1,6 +1,7 @@
 # Dataset and outputs
 nights/*
 imagenet-100/*
+imagenet-100-images/*
 reports/*
 models/*
 training/embeddings/*
