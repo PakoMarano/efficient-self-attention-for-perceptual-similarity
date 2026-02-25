@@ -1,6 +1,5 @@
 import argparse
 import os
-import time
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import torch
@@ -130,7 +129,6 @@ def _evaluate_2afc(
     dataloader: DataLoader,
     model: nn.Module,
     device: str,
-    warmup_batches: int,
     max_batches: Optional[int] = None,
 ) -> Dict[str, float]:
     model.eval()
@@ -139,27 +137,7 @@ def _evaluate_2afc(
 
     correct = 0
     total = 0
-    measured_images = 0
     measured_batches = 0
-    model_time = 0.0
-
-    with torch.no_grad():
-        iterator = iter(dataloader)
-        for _ in range(min(warmup_batches, len(dataloader))):
-            try:
-                ref, left, right, _, _ = next(iterator)
-            except StopIteration:
-                break
-            ref = ref.to(device, non_blocking=True)
-            left = left.to(device, non_blocking=True)
-            right = right.to(device, non_blocking=True)
-            with torch.amp.autocast(amp_device, enabled=use_cuda):
-                _ = model(ref, left)
-                _ = model(ref, right)
-
-    if use_cuda:
-        torch.cuda.synchronize()
-        torch.cuda.reset_peak_memory_stats()
 
     with torch.no_grad():
         for ref, left, right, pref_right, _ in dataloader:
@@ -170,35 +148,22 @@ def _evaluate_2afc(
             left = left.to(device, non_blocking=True)
             right = right.to(device, non_blocking=True)
             target = (pref_right >= 0.5).long().to(device, non_blocking=True)
-
-            if use_cuda:
-                torch.cuda.synchronize()
-            start = time.perf_counter()
             with torch.amp.autocast(amp_device, enabled=use_cuda):
                 dist_left = model(ref, left)
                 dist_right = model(ref, right)
                 pred = (dist_right < dist_left).long()
-            if use_cuda:
-                torch.cuda.synchronize()
-            model_time += time.perf_counter() - start
 
             correct += (pred == target).sum().item()
             n = target.numel()
             total += n
-            measured_images += n * 3
             measured_batches += 1
 
     accuracy = correct / max(total, 1)
-    img_per_sec = measured_images / max(model_time, 1e-9)
-    max_mem_mb = (torch.cuda.max_memory_allocated() / (1024**2)) if use_cuda else 0.0
 
     return {
         "accuracy_2afc": accuracy,
-        "img_per_sec_2afc": img_per_sec,
-        "max_mem_mb_2afc": max_mem_mb,
         "samples_2afc": total,
         "batches_2afc": measured_batches,
-        "timed_seconds_2afc": model_time,
     }
 
 
@@ -221,7 +186,6 @@ def run_distillation(
     epochs: int = 5,
     lr: float = 1e-4,
     weight_decay: float = 0.0,
-    warmup_batches: int = 10,
     max_batches: Optional[int] = None,
     val_max_batches: Optional[int] = None,
     loss_type: str = "cosine",
@@ -334,22 +298,6 @@ def run_distillation(
         epoch_loss = 0.0
         epoch_samples = 0
         measured_batches = 0
-        model_time = 0.0
-
-        with torch.no_grad():
-            iterator = iter(train_loader)
-            for _ in range(min(warmup_batches, len(train_loader))):
-                try:
-                    imgs, _, _, _, _ = next(iterator)
-                except StopIteration:
-                    break
-                imgs = imgs.to(device, non_blocking=True)
-                with torch.amp.autocast(amp_device, enabled=use_cuda):
-                    _ = model.embed(imgs)
-
-        if use_cuda:
-            torch.cuda.synchronize()
-            torch.cuda.reset_peak_memory_stats()
 
         for imgs, teacher_embed, _, _, _ in train_loader:
             if max_batches is not None and measured_batches >= max_batches:
@@ -357,10 +305,6 @@ def run_distillation(
 
             imgs = imgs.to(device, non_blocking=True)
             teacher_embed = teacher_embed.to(device, non_blocking=True)
-
-            if use_cuda:
-                torch.cuda.synchronize()
-            start = time.perf_counter()
 
             optimizer.zero_grad(set_to_none=True)
             with torch.amp.autocast(amp_device, enabled=use_cuda):
@@ -382,10 +326,6 @@ def run_distillation(
             scaler.step(optimizer)
             scaler.update()
 
-            if use_cuda:
-                torch.cuda.synchronize()
-            model_time += time.perf_counter() - start
-
             batch_size_actual = imgs.shape[0]
             epoch_samples += batch_size_actual
             epoch_loss += loss.item() * batch_size_actual
@@ -393,8 +333,6 @@ def run_distillation(
             total_steps += 1
 
         avg_loss = epoch_loss / max(epoch_samples, 1)
-        img_per_sec = epoch_samples / max(model_time, 1e-9)
-        max_mem_mb = (torch.cuda.max_memory_allocated() / (1024**2)) if use_cuda else 0.0
 
         val_metrics = _evaluate_similarity(
             dataloader=val_loader,
@@ -415,9 +353,6 @@ def run_distillation(
             "val_loss": round(val_metrics["val_loss"], 6),
             "val_cosine": round(val_metrics["val_cosine"], 6),
             "val_samples": int(val_metrics["val_samples"]),
-            "img_per_sec": round(img_per_sec, 3),
-            "max_mem_mb": round(max_mem_mb, 3),
-            "timed_seconds": round(model_time, 6),
             "attention_module": "pool",
             "loss_type": loss_type,
             "normalize_for_loss": normalize_for_loss,
@@ -453,17 +388,13 @@ def run_distillation(
                 dataloader=eval_loader,
                 model=model,
                 device=device,
-                warmup_batches=warmup_batches,
                 max_batches=eval_2afc_max_batches,
             )
             record.update(
                 {
                     "accuracy_2afc": round(eval_metrics["accuracy_2afc"], 6),
-                    "img_per_sec_2afc": round(eval_metrics["img_per_sec_2afc"], 3),
-                    "max_mem_mb_2afc": round(eval_metrics["max_mem_mb_2afc"], 3),
                     "samples_2afc": eval_metrics["samples_2afc"],
                     "batches_2afc": eval_metrics["batches_2afc"],
-                    "timed_seconds_2afc": round(eval_metrics["timed_seconds_2afc"], 6),
                     "eval_2afc_split": eval_2afc_split,
                 }
             )
@@ -473,9 +404,7 @@ def run_distillation(
             f"epoch={epoch} loss={avg_loss:.6f} "
             f"val_loss={val_metrics['val_loss']:.6f} "
             f"val_cos={val_metrics['val_cosine']:.4f} "
-            f"samples={epoch_samples} "
-            f"{img_per_sec:.1f} img/s "
-            f"max_mem={max_mem_mb:.1f} MB"
+            f"samples={epoch_samples}"
         )
 
         if avg_loss < best_loss:
@@ -529,7 +458,6 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--weight_decay", type=float, default=0.0)
-    parser.add_argument("--warmup_batches", type=int, default=10)
     parser.add_argument("--max_batches", type=int, default=None)
     parser.add_argument("--val_max_batches", type=int, default=None)
     parser.add_argument("--loss_type", type=str, default="cosine", choices=["cosine", "mse"])
@@ -571,7 +499,6 @@ def main():
         epochs=args.epochs,
         lr=args.lr,
         weight_decay=args.weight_decay,
-        warmup_batches=args.warmup_batches,
         max_batches=args.max_batches,
         val_max_batches=args.val_max_batches,
         loss_type=args.loss_type,

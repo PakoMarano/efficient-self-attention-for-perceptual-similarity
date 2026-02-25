@@ -4,7 +4,7 @@ Master's thesis project on efficient self-attention mechanisms for perceptual im
 
 ## Project Goals
 
-- Evaluate how efficient attention mechanisms can replace standard MHA in a transformer backbone for perceptual similarity.
+- Evaluate how efficient attention mechanisms can replace MHA in a transformer backbone for perceptual similarity.
 - Measure the trade-off between efficiency gains and accuracy loss for each efficient variant.
 - Compare theoretical efficiency gains with empirical runtime improvements.
 - Show how knowledge distillation can recover a large portion of the lost accuracy.

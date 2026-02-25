@@ -1,6 +1,5 @@
 import argparse
 import os
-import time
 from typing import Any, Callable, Dict, List, Optional, Set
 
 import torch
@@ -68,7 +67,6 @@ def extract_embeddings(
     dataloader: DataLoader,
     model: torch.nn.Module,
     device: str = "cuda",
-    warmup_batches: int = 10,
     max_batches: Optional[int] = None,
 ) -> Dict[str, Any]:
     model.eval()
@@ -77,9 +75,7 @@ def extract_embeddings(
     use_cuda = device.startswith("cuda") and torch.cuda.is_available()
     amp_device = "cuda" if use_cuda else "cpu"
 
-    measured_images = 0
     measured_batches = 0
-    model_time = 0.0
 
     embeddings: List[torch.Tensor] = []
     paths: List[str] = []
@@ -87,36 +83,13 @@ def extract_embeddings(
     roles: List[str] = []
 
     with torch.no_grad():
-        iterator = iter(dataloader)
-        for _ in range(min(warmup_batches, len(dataloader))):
-            try:
-                imgs, _, _, _ = next(iterator)
-            except StopIteration:
-                break
-
-            imgs = imgs.to(device, non_blocking=True)
-            with torch.amp.autocast(amp_device, enabled=use_cuda):
-                _ = embed_fn(imgs)
-
-    if use_cuda:
-        torch.cuda.synchronize()
-        torch.cuda.reset_peak_memory_stats()
-
-    with torch.no_grad():
         for imgs, rel_paths, ids, batch_roles in dataloader:
             if max_batches is not None and measured_batches >= max_batches:
                 break
 
             imgs = imgs.to(device, non_blocking=True)
-
-            if use_cuda:
-                torch.cuda.synchronize()
-            start = time.perf_counter()
             with torch.amp.autocast(amp_device, enabled=use_cuda):
                 batch_embeds = embed_fn(imgs)
-            if use_cuda:
-                torch.cuda.synchronize()
-            model_time += time.perf_counter() - start
 
             if batch_embeds.ndim == 1:
                 batch_embeds = batch_embeds.unsqueeze(0)
@@ -130,7 +103,6 @@ def extract_embeddings(
             else:
                 sample_ids.extend([int(i) for i in ids])
 
-            measured_images += imgs.shape[0]
             measured_batches += 1
 
     if embeddings:
@@ -138,20 +110,13 @@ def extract_embeddings(
     else:
         all_embeddings = torch.empty((0,), dtype=torch.float32)
 
-    img_per_sec = measured_images / max(model_time, 1e-9)
-    max_mem_mb = (torch.cuda.max_memory_allocated() / (1024**2)) if use_cuda else 0.0
-
     return {
         "embeddings": all_embeddings,
         "paths": paths,
         "ids": torch.tensor(sample_ids, dtype=torch.long),
         "roles": roles,
-        "samples": measured_images,
+        "samples": all_embeddings.shape[0],
         "batches": measured_batches,
-        "warmup_batches": min(warmup_batches, len(dataloader)),
-        "timed_seconds": model_time,
-        "img_per_sec": img_per_sec,
-        "max_mem_mb": max_mem_mb,
     }
 
 
@@ -167,7 +132,6 @@ def run_embedding_extraction(
     pretrained: bool = True,
     normalize_embeds: bool = True,
     use_patch_model: bool = False,
-    warmup_batches: int = 10,
     max_batches: Optional[int] = None,
     max_samples: Optional[int] = None,
     attention_module: str = "benchmark",
@@ -197,7 +161,6 @@ def run_embedding_extraction(
         dataloader=dataloader,
         model=model,
         device=device,
-        warmup_batches=warmup_batches,
         max_batches=max_batches,
     )
 
@@ -219,7 +182,6 @@ def run_embedding_extraction(
             "normalize_embeds": normalize_embeds,
             "use_patch_model": use_patch_model,
             "attention_module": attention_module,
-            "warmup_batches": warmup_batches,
             "max_batches": max_batches,
             "max_samples": max_samples,
             "unique_only": unique_only,
@@ -243,19 +205,13 @@ def run_embedding_extraction(
         "output_path": output_path,
         "samples": extraction["samples"],
         "batches": extraction["batches"],
-        "warmup_batches": extraction["warmup_batches"],
-        "timed_seconds": round(extraction["timed_seconds"], 6),
-        "img_per_sec": round(extraction["img_per_sec"], 3),
-        "max_mem_mb": round(extraction["max_mem_mb"], 3),
     }
     log_result(results_csv, record)
 
     print(
         f"split={split}, attention_module={attention_module}: "
         f"saved={output_path}, "
-        f"samples={extraction['samples']}, "
-        f"{extraction['img_per_sec']:.1f} img/s, "
-        f"max_mem={extraction['max_mem_mb']:.1f} MB"
+        f"samples={extraction['samples']}"
     )
 
     return record
@@ -272,7 +228,6 @@ def parse_args():
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--img_size", type=int, default=224)
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--warmup_batches", type=int, default=10)
     parser.add_argument("--max_batches", type=int, default=None)
     parser.add_argument("--max_samples", type=int, default=None)
     parser.add_argument("--attention_module", type=str, default="benchmark")
@@ -298,7 +253,6 @@ def main():
         pretrained=not args.no_pretrained,
         normalize_embeds=not args.no_normalize_embeds,
         use_patch_model=args.use_patch_model,
-        warmup_batches=args.warmup_batches,
         max_batches=args.max_batches,
         max_samples=args.max_samples,
         attention_module=args.attention_module,
