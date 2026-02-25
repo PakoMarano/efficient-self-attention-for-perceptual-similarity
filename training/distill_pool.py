@@ -1,6 +1,6 @@
 import argparse
 import os
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -69,20 +69,13 @@ def _evaluate_similarity(
     dataloader: DataLoader,
     model: nn.Module,
     device: str,
-    loss_type: str,
     normalize_for_loss: bool,
     max_batches: Optional[int] = None,
 ) -> Dict[str, float]:
     model.eval()
     use_cuda = device.startswith("cuda") and torch.cuda.is_available()
     amp_device = "cuda" if use_cuda else "cpu"
-
-    if loss_type == "cosine":
-        loss_fn = nn.CosineEmbeddingLoss()
-    elif loss_type == "mse":
-        loss_fn = nn.MSELoss()
-    else:
-        raise ValueError("loss_type must be 'cosine' or 'mse'.")
+    loss_fn = nn.CosineEmbeddingLoss()
 
     total_loss = 0.0
     total_cos = 0.0
@@ -105,11 +98,8 @@ def _evaluate_similarity(
                     student_embed = F.normalize(student_embed, dim=-1)
                     teacher_embed = F.normalize(teacher_embed, dim=-1)
 
-                if loss_type == "cosine":
-                    target = torch.ones(student_embed.shape[0], device=device)
-                    loss = loss_fn(student_embed, teacher_embed, target)
-                else:
-                    loss = loss_fn(student_embed, teacher_embed)
+                target = torch.ones(student_embed.shape[0], device=device)
+                loss = loss_fn(student_embed, teacher_embed, target)
 
                 cos = F.cosine_similarity(student_embed, teacher_embed, dim=-1).mean()
 
@@ -188,7 +178,6 @@ def run_distillation(
     weight_decay: float = 0.0,
     max_batches: Optional[int] = None,
     val_max_batches: Optional[int] = None,
-    loss_type: str = "cosine",
     normalize_for_loss: bool = False,
     train_mlp: bool = True,
     train_norm: bool = True,
@@ -281,12 +270,7 @@ def run_distillation(
         weight_decay=weight_decay,
     )
 
-    if loss_type == "cosine":
-        loss_fn = nn.CosineEmbeddingLoss()
-    elif loss_type == "mse":
-        loss_fn = nn.MSELoss()
-    else:
-        raise ValueError("loss_type must be 'cosine' or 'mse'.")
+    loss_fn = nn.CosineEmbeddingLoss()
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -316,11 +300,8 @@ def run_distillation(
                     student_embed = F.normalize(student_embed, dim=-1)
                     teacher_embed = F.normalize(teacher_embed, dim=-1)
 
-                if loss_type == "cosine":
-                    target = torch.ones(student_embed.shape[0], device=device)
-                    loss = loss_fn(student_embed, teacher_embed, target)
-                else:
-                    loss = loss_fn(student_embed, teacher_embed)
+                target = torch.ones(student_embed.shape[0], device=device)
+                loss = loss_fn(student_embed, teacher_embed, target)
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -338,7 +319,6 @@ def run_distillation(
             dataloader=val_loader,
             model=model,
             device=device,
-            loss_type=loss_type,
             normalize_for_loss=normalize_for_loss,
             max_batches=val_max_batches,
         )
@@ -354,7 +334,6 @@ def run_distillation(
             "val_cosine": round(val_metrics["val_cosine"], 6),
             "val_samples": int(val_metrics["val_samples"]),
             "attention_module": "pool",
-            "loss_type": loss_type,
             "normalize_for_loss": normalize_for_loss,
             "batch_size": batch_size,
             "num_workers": num_workers,
@@ -460,7 +439,6 @@ def parse_args():
     parser.add_argument("--weight_decay", type=float, default=0.0)
     parser.add_argument("--max_batches", type=int, default=None)
     parser.add_argument("--val_max_batches", type=int, default=None)
-    parser.add_argument("--loss_type", type=str, default="cosine", choices=["cosine", "mse"])
     parser.add_argument("--normalize_for_loss", action="store_true")
     parser.add_argument("--no_pretrained", action="store_true")
     parser.add_argument("--no_normalize_embeds", action="store_true")
@@ -501,7 +479,6 @@ def main():
         weight_decay=args.weight_decay,
         max_batches=args.max_batches,
         val_max_batches=args.val_max_batches,
-        loss_type=args.loss_type,
         normalize_for_loss=args.normalize_for_loss,
         train_mlp=not args.no_train_mlp,
         train_norm=not args.no_train_norm,
