@@ -188,6 +188,7 @@ def run_distillation(
     eval_2afc_batch_size: int = 16,
     eval_2afc_num_workers: int = 0,
     eval_2afc_max_batches: Optional[int] = None,
+    resume_checkpoint: Optional[str] = None,
 ) -> Dict[str, Any]:
     teacher_embeds, teacher_paths, teacher_cfg = _load_teacher_embeddings(teacher_embeddings)
     teacher_map = _build_teacher_map(teacher_embeds, teacher_paths)
@@ -259,6 +260,12 @@ def run_distillation(
         attention_module="pool",
     )
 
+    resume_payload: Optional[Dict[str, Any]] = None
+    if resume_checkpoint:
+        resume_payload = torch.load(resume_checkpoint, map_location="cpu")
+        resume_state = resume_payload.get("state_dict", resume_payload)
+        model.load_state_dict(resume_state)
+
     trainable_params = _set_trainable_params(model, train_mlp=train_mlp, train_norm=train_norm)
     if trainable_params == 0:
         raise ValueError("No trainable parameters selected. Enable MLP and/or LayerNorm.")
@@ -275,14 +282,34 @@ def run_distillation(
         weight_decay=weight_decay,
     )
 
+    resumed_epoch = 0
+    if resume_payload is not None:
+        resumed_epoch = int(resume_payload.get("epoch", 0))
+        if "optimizer_state_dict" in resume_payload:
+            optimizer.load_state_dict(resume_payload["optimizer_state_dict"])
+        if "scaler_state_dict" in resume_payload:
+            scaler.load_state_dict(resume_payload["scaler_state_dict"])
+    start_epoch = resumed_epoch + 1 if resume_payload is not None else 1
+
+    if start_epoch < 1:
+        raise ValueError(f"start_epoch must be >= 1, got {start_epoch}")
+
+    if start_epoch > epochs:
+        raise ValueError(
+            f"start_epoch ({start_epoch}) is greater than epochs ({epochs}). "
+            "Set a larger --epochs or a smaller --start_epoch."
+        )
+
     loss_fn = nn.CosineEmbeddingLoss()
 
     os.makedirs(output_dir, exist_ok=True)
 
     best_loss = float("inf")
+    if resume_payload is not None and "loss" in resume_payload:
+        best_loss = min(best_loss, float(resume_payload["loss"]))
     total_steps = 0
 
-    for epoch in range(1, epochs + 1):
+    for epoch in range(start_epoch, epochs + 1):
         model.train()
         epoch_loss = 0.0
         epoch_samples = 0
@@ -398,6 +425,8 @@ def run_distillation(
             torch.save(
                 {
                     "state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "scaler_state_dict": scaler.state_dict(),
                     "epoch": epoch,
                     "loss": avg_loss,
                     "config": record,
@@ -410,6 +439,8 @@ def run_distillation(
             torch.save(
                 {
                     "state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "scaler_state_dict": scaler.state_dict(),
                     "epoch": epoch,
                     "loss": avg_loss,
                     "config": record,
@@ -420,6 +451,8 @@ def run_distillation(
     return {
         "best_loss": best_loss,
         "epochs": epochs,
+        "start_epoch": start_epoch,
+        "resumed_from_epoch": resumed_epoch,
         "steps": total_steps,
         "output_dir": output_dir,
     }
@@ -459,6 +492,7 @@ def parse_args():
     parser.add_argument("--eval_2afc_batch_size", type=int, default=16)
     parser.add_argument("--eval_2afc_num_workers", type=int, default=0)
     parser.add_argument("--eval_2afc_max_batches", type=int, default=None)
+    parser.add_argument("--resume_checkpoint", type=str, default=None)
     return parser.parse_args()
 
 
@@ -496,6 +530,7 @@ def main():
         eval_2afc_batch_size=args.eval_2afc_batch_size,
         eval_2afc_num_workers=args.eval_2afc_num_workers,
         eval_2afc_max_batches=args.eval_2afc_max_batches,
+        resume_checkpoint=args.resume_checkpoint,
     )
 
 

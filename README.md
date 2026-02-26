@@ -78,5 +78,5 @@ python -m training.distill_pool --teacher_embeddings ./training/embeddings/night
 Distill with extra ImageNet100 images in train split (val remains NIGHTS-only):
 
 ```bash
-python -m training.distill_pool --teacher_embeddings ./training/embeddings/nights_imagenet100.pt --train_split train --val_split val --epochs 100 --batch_size 64 --num_workers 4 --device cuda --extra_image_roots ./imagenet-100-images --eval_2afc_every 20 --eval_2afc_split val
+python -m training.distill_pool --teacher_embeddings ./training/embeddings/nights_imagenet100.pt --train_split train --val_split val --epochs 75 --batch_size 128 --num_workers 2 --device cuda --extra_image_roots ./imagenet-100-images --eval_2afc_every 15 --eval_2afc_split val
 ```
