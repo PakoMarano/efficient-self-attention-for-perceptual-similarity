@@ -1,6 +1,7 @@
 import argparse
+import os
 import time
-from typing import Optional
+from typing import Any, Dict, Optional, Tuple
 
 import torch
 from torch.utils.data import DataLoader, Subset
@@ -8,6 +9,24 @@ from torch.utils.data import DataLoader, Subset
 from dataset import TwoAFCDataset
 from model import dreamsim
 from utils import log_result
+
+
+def _load_checkpoint(path: str) -> Tuple[Dict[str, torch.Tensor], Dict[str, Any]]:
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Checkpoint not found: {path}")
+
+    payload = torch.load(path, map_location="cpu")
+
+    if isinstance(payload, dict) and "state_dict" in payload:
+        state_dict = payload["state_dict"]
+        config = payload.get("config", {})
+    elif isinstance(payload, dict):
+        state_dict = payload
+        config = {}
+    else:
+        raise ValueError("Unsupported checkpoint format. Expected dict or dict with 'state_dict'.")
+
+    return state_dict, config
 
 
 def create_dataloader(
@@ -132,7 +151,12 @@ def run_evaluation(
     max_samples: Optional[int] = None,
     attention_module: str = "benchmark",
     results_csv: str = "./reports/results.csv",
+    checkpoint_path: Optional[str] = None,
 ):
+    ckpt_state_dict: Optional[Dict[str, torch.Tensor]] = None
+    if checkpoint_path is not None:
+        ckpt_state_dict, _ = _load_checkpoint(checkpoint_path)
+
     dataloader = create_dataloader(
         dataset_root=dataset_root,
         split=split,
@@ -150,6 +174,9 @@ def run_evaluation(
         use_patch_model=use_patch_model,
         attention_module=attention_module,
     )
+
+    if ckpt_state_dict is not None:
+        model.load_state_dict(ckpt_state_dict, strict=True)
 
     metrics = eval_2afc(
         dataloader=dataloader,
@@ -178,6 +205,7 @@ def run_evaluation(
         "batches": metrics["batches"],
         "warmup_batches": metrics["warmup_batches"],
         "timed_seconds": round(metrics["timed_seconds"], 6),
+        "checkpoint_path": checkpoint_path,
     }
     log_result(results_csv, record)
 
@@ -205,6 +233,7 @@ def parse_args():
     parser.add_argument("--max_batches", type=int, default=None)
     parser.add_argument("--max_samples", type=int, default=None)
     parser.add_argument("--attention_module", type=str, default="benchmark")
+    parser.add_argument("--checkpoint_path", type=str, default=None)
     parser.add_argument("--use_patch_model", action="store_true")
     parser.add_argument("--no_pretrained", action="store_true")
     parser.add_argument("--no_normalize_embeds", action="store_true")
@@ -230,6 +259,7 @@ def main():
         max_samples=args.max_samples,
         attention_module=args.attention_module,
         results_csv=args.results_csv,
+        checkpoint_path=args.checkpoint_path,
     )
 
 
