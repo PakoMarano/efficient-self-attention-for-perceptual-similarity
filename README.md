@@ -8,6 +8,7 @@ Master's thesis project on efficient self-attention mechanisms for perceptual im
 - Measure the trade-off between efficiency gains and accuracy loss for each efficient variant.
 - Compare theoretical efficiency gains with empirical runtime improvements.
 - Show how knowledge distillation can recover a large portion of the lost accuracy.
+- Propose a model that gets XX 2AFC accuracy on NIGHTS and is X times faster then DreamSim. 
 
 ## Resources and Credits
 
