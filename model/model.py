@@ -4,9 +4,9 @@ import zipfile
 
 import torch
 import torch.nn.functional as F
+from safetensors.torch import load_file
 from torchvision import transforms
-import peft
-from peft import PeftModel, LoraConfig, get_peft_model
+from peft import LoraConfig, get_peft_model
 
 from .constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .feature_extraction.extractor import ViTExtractor
@@ -213,10 +213,44 @@ def dreamsim(pretrained: bool = True, device="cuda", cache_dir="./models", norma
         lora_config = LoraConfig(**{k: adapter_config[k] for k in lora_keys})
         model = get_peft_model(model, lora_config)
 
-        # Load pretrained adapter weights if requested
         if pretrained:
-            load_dir = os.path.join(cache_dir, lora_tag)
-            model = PeftModel.from_pretrained(model.base_model.model, load_dir).to(device)
+            adapter_path = os.path.join(cache_dir, lora_tag, 'adapter_model.safetensors')
+            adapter_state = load_file(adapter_path)
+
+            remapped_state = {}
+            for key, value in adapter_state.items():
+                new_key = key.replace(
+                    'base_model.model.extractor_list.0.model.',
+                    'base_model.model.extractor.model.',
+                )
+                new_key = new_key.replace('.lora_A.weight', '.lora_A.default.weight')
+                new_key = new_key.replace('.lora_B.weight', '.lora_B.default.weight')
+                remapped_state[new_key] = value
+
+            incompatible = model.load_state_dict(remapped_state, strict=False)
+            missing_lora = [key for key in incompatible.missing_keys if 'lora_' in key]
+            if missing_lora or incompatible.unexpected_keys:
+                raise RuntimeError(
+                    f"Failed to load LoRA adapter '{lora_tag}'. "
+                    f"missing_lora={len(missing_lora)}, "
+                    f"unexpected={len(incompatible.unexpected_keys)}"
+                )
+
+        has_lora_params = any('lora_' in name for name, _ in model.named_parameters())
+        if not has_lora_params:
+            raise RuntimeError(
+                f"LoRA adapters were not attached correctly for tag '{lora_tag}'."
+            )
+
+        if pretrained:
+            has_nonzero_lora_b = any(
+                ('lora_B' in name) and torch.count_nonzero(param.detach()).item() > 0
+                for name, param in model.named_parameters()
+            )
+            if not has_nonzero_lora_b:
+                raise RuntimeError(
+                    f"Loaded LoRA adapter '{lora_tag}' appears inactive (all lora_B weights are zero)."
+                )
 
     model.eval().requires_grad_(False)
 
