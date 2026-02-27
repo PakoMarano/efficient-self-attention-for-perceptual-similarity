@@ -172,7 +172,6 @@ def run_distillation(
     pretrained: bool = True,
     normalize_embeds: Optional[bool] = None,
     use_patch_model: Optional[bool] = None,
-    unique_only: Optional[bool] = None,
     extra_image_roots: Optional[List[str]] = None,
     epochs: int = 5,
     lr: float = 1e-4,
@@ -201,8 +200,6 @@ def run_distillation(
         normalize_embeds = bool(teacher_cfg.get("normalize_embeds", True))
     if use_patch_model is None:
         use_patch_model = bool(teacher_cfg.get("use_patch_model", False))
-    if unique_only is None:
-        unique_only = bool(teacher_cfg.get("unique_only", True))
 
     train_paths = load_split_paths(dataset_root, train_split)
     val_paths = load_split_paths(dataset_root, val_split)
@@ -212,10 +209,8 @@ def run_distillation(
         split=train_split,
         img_size=img_size,
         teacher_map=teacher_map,
-        unique_only=unique_only,
         allowed_paths=train_paths,
         extra_image_roots=extra_image_roots,
-        include_extra_images=bool(extra_image_roots),
     )
 
     if len(train_dataset) == 0:
@@ -234,10 +229,8 @@ def run_distillation(
         split=val_split,
         img_size=img_size,
         teacher_map=teacher_map,
-        unique_only=unique_only,
         allowed_paths=val_paths,
         extra_image_roots=None,
-        include_extra_images=False,
     )
 
     if len(val_dataset) == 0:
@@ -374,7 +367,6 @@ def run_distillation(
             "pretrained": pretrained,
             "normalize_embeds": normalize_embeds,
             "use_patch_model": use_patch_model,
-            "unique_only": unique_only,
             "extra_image_roots": "|".join(extra_image_roots) if extra_image_roots else "",
             "train_mlp": train_mlp,
             "train_norm": train_norm,
@@ -482,7 +474,6 @@ def parse_args():
     parser.add_argument("--no_pretrained", action="store_true")
     parser.add_argument("--no_normalize_embeds", action="store_true")
     parser.add_argument("--use_patch_model", action="store_true")
-    parser.add_argument("--keep_duplicates", action="store_true")
     parser.add_argument("--extra_image_roots", type=str, nargs="*", default=None)
     parser.add_argument("--no_train_mlp", action="store_true")
     parser.add_argument("--no_train_norm", action="store_true")
@@ -514,7 +505,6 @@ def main():
         pretrained=not args.no_pretrained,
         normalize_embeds=False if args.no_normalize_embeds else None,
         use_patch_model=True if args.use_patch_model else None,
-        unique_only=not args.keep_duplicates,
         extra_image_roots=args.extra_image_roots,
         epochs=args.epochs,
         lr=args.lr,

@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import torch
 from torch.utils.data import Dataset
@@ -10,6 +10,25 @@ import os
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+BASE_SPLITS = {"train", "val", "test"}
+SPECIAL_SPLITS = {"test_imagenet", "test_no_imagenet"}
+
+
+def _filter_df_by_split(df: pd.DataFrame, split: str, allow_all: bool = False) -> pd.DataFrame:
+    valid_splits = BASE_SPLITS | SPECIAL_SPLITS
+    if allow_all:
+        valid_splits = valid_splits | {"all"}
+
+    if split not in valid_splits:
+        raise ValueError(f"Invalid split: {split}")
+
+    if split in BASE_SPLITS:
+        return df[df["split"] == split]
+    if split == "test_imagenet":
+        return df[(df["split"] == "test") & (df["is_imagenet"] == True)]
+    if split == "test_no_imagenet":
+        return df[(df["split"] == "test") & (df["is_imagenet"] == False)]
+    return df
 
 
 def _list_relative_image_paths(root_dir: str) -> List[str]:
@@ -26,6 +45,72 @@ def _list_relative_image_paths(root_dir: str) -> List[str]:
     return rel_paths
 
 
+def _flatten_triplet_records(csv_df: pd.DataFrame, root_dir: str) -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+    for _, row in csv_df.iterrows():
+        base = {
+            "id": int(row["id"]),
+            "split": row["split"],
+            "is_imagenet": bool(row["is_imagenet"]),
+        }
+        for role, path_col in (("ref", "ref_path"), ("left", "left_path"), ("right", "right_path")):
+            rel_path = row[path_col]
+            records.append(
+                {
+                    **base,
+                    "role": role,
+                    "path": rel_path,
+                    "disk_path": os.path.join(root_dir, rel_path),
+                }
+            )
+    return records
+
+
+def _build_extra_image_records(
+    extra_image_roots: Sequence[str],
+    start_id: int,
+) -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+    next_id = start_id
+    for root_idx, extra_root in enumerate(extra_image_roots):
+        rel_paths = _list_relative_image_paths(extra_root)
+        root_label = os.path.basename(os.path.normpath(extra_root)) or f"root{root_idx}"
+        for rel_path in rel_paths:
+            records.append(
+                {
+                    "id": next_id,
+                    "split": "extra",
+                    "is_imagenet": True,
+                    "role": "extra",
+                    "path": f"extra/{root_idx}_{root_label}/{rel_path}",
+                    "disk_path": os.path.join(extra_root, rel_path.replace("/", os.sep)),
+                }
+            )
+            next_id += 1
+    return records
+
+
+def _select_distill_indices(
+    images_df: pd.DataFrame,
+    teacher_map: Dict[str, torch.Tensor],
+    allowed_paths: Optional[Iterable[str]],
+) -> List[int]:
+    allowed_set = set(allowed_paths) if allowed_paths is not None else None
+    if allowed_set is not None and len(allowed_set) == 0:
+        return []
+
+    indices: List[int] = []
+    for idx, row in enumerate(images_df.itertuples(index=False)):
+        path = row.path
+        if path not in teacher_map:
+            continue
+        if allowed_set is not None and row.role != "extra" and path not in allowed_set:
+            # Keep extra images whenever present; they are intentionally not split-gated.
+            continue
+        indices.append(idx)
+    return indices
+
+
 def _get_preprocess_fn(load_size, interpolation):
     t = transforms.Compose([
         transforms.Resize((load_size, load_size), interpolation=interpolation),
@@ -38,16 +123,7 @@ def load_split_paths(root_dir: str, split: str) -> Iterable[str]:
     csv_path = os.path.join(root_dir, "data.csv")
     df = pd.read_csv(csv_path)
     df = df[df["votes"] >= 6]
-
-    if split not in {"train", "val", "test", "test_imagenet", "test_no_imagenet"}:
-        raise ValueError(f"Invalid split: {split}")
-
-    if split == "test_imagenet":
-        df = df[(df["split"] == "test") & (df["is_imagenet"] == True)]
-    elif split == "test_no_imagenet":
-        df = df[(df["split"] == "test") & (df["is_imagenet"] == False)]
-    else:
-        df = df[df["split"] == split]
+    df = _filter_df_by_split(df, split)
 
     paths = set(df["ref_path"]).union(df["left_path"]).union(df["right_path"])
     return paths
@@ -64,17 +140,8 @@ class TwoAFCDataset(Dataset):
         self.load_size = load_size
         self.interpolation = interpolation
         self.preprocess_fn = _get_preprocess_fn(self.load_size, self.interpolation)
-        
-        if self.split == "train" or self.split == "val" or self.split == "test":
-            self.csv = self.csv[self.csv["split"] == split]
-        elif split == 'test_imagenet':
-            self.csv = self.csv[self.csv['split'] == 'test']
-            self.csv = self.csv[self.csv['is_imagenet'] == True]
-        elif split == 'test_no_imagenet':
-            self.csv = self.csv[self.csv['split'] == 'test']
-            self.csv = self.csv[self.csv['is_imagenet'] == False]
-        else:
-            raise ValueError(f'Invalid split: {split}')
+
+        self.csv = _filter_df_by_split(self.csv, self.split)
 
     def __len__(self):
         return len(self.csv)
@@ -91,9 +158,7 @@ class TwoAFCDataset(Dataset):
 class SingleImageDataset(Dataset):
     def __init__(self, root_dir: str, split: str = "all", load_size: int = 224,
                  interpolation: transforms.InterpolationMode = transforms.InterpolationMode.BICUBIC,
-                 unique_only: bool = True,
                  extra_image_roots: Optional[Sequence[str]] = None,
-                 include_extra_images: bool = False,
                  **kwargs):
         self.root_dir = root_dir
         self.csv = pd.read_csv(os.path.join(self.root_dir, "data.csv"))
@@ -103,65 +168,16 @@ class SingleImageDataset(Dataset):
         self.interpolation = interpolation
         self.preprocess_fn = _get_preprocess_fn(self.load_size, self.interpolation)
 
-        if self.split in {"train", "val", "test"}:
-            self.csv = self.csv[self.csv["split"] == split]
-        elif split == 'test_imagenet':
-            self.csv = self.csv[self.csv['split'] == 'test']
-            self.csv = self.csv[self.csv['is_imagenet'] == True]
-        elif split == 'test_no_imagenet':
-            self.csv = self.csv[self.csv['split'] == 'test']
-            self.csv = self.csv[self.csv['is_imagenet'] == False]
-        elif split == 'all':
-            pass
-        else:
-            raise ValueError(f'Invalid split: {split}')
+        self.csv = _filter_df_by_split(self.csv, self.split, allow_all=True)
 
-        records = []
-        for _, row in self.csv.iterrows():
-            records.append({
-                'id': int(row['id']),
-                'split': row['split'],
-                'is_imagenet': bool(row['is_imagenet']),
-                'role': 'ref',
-                'path': row['ref_path'],
-                'disk_path': os.path.join(self.root_dir, row['ref_path']),
-            })
-            records.append({
-                'id': int(row['id']),
-                'split': row['split'],
-                'is_imagenet': bool(row['is_imagenet']),
-                'role': 'left',
-                'path': row['left_path'],
-                'disk_path': os.path.join(self.root_dir, row['left_path']),
-            })
-            records.append({
-                'id': int(row['id']),
-                'split': row['split'],
-                'is_imagenet': bool(row['is_imagenet']),
-                'role': 'right',
-                'path': row['right_path'],
-                'disk_path': os.path.join(self.root_dir, row['right_path']),
-            })
+        records = _flatten_triplet_records(self.csv, self.root_dir)
 
-        if include_extra_images and extra_image_roots:
-            next_id = int(self.csv['id'].max()) + 1 if len(self.csv) > 0 else 1
-            for root_idx, extra_root in enumerate(extra_image_roots):
-                rel_paths = _list_relative_image_paths(extra_root)
-                root_label = os.path.basename(os.path.normpath(extra_root)) or f"root{root_idx}"
-                for rel_path in rel_paths:
-                    records.append({
-                        'id': next_id,
-                        'split': 'extra',
-                        'is_imagenet': True,
-                        'role': 'extra',
-                        'path': f"extra/{root_idx}_{root_label}/{rel_path}",
-                        'disk_path': os.path.join(extra_root, rel_path.replace('/', os.sep)),
-                    })
-                    next_id += 1
+        if extra_image_roots:
+            start_id = int(self.csv['id'].max()) + 1 if len(self.csv) > 0 else 1
+            records.extend(_build_extra_image_records(extra_image_roots, start_id))
 
         images_df = pd.DataFrame(records)
-        if unique_only:
-            images_df = images_df.drop_duplicates(subset=['path']).reset_index(drop=True)
+        images_df = images_df.drop_duplicates(subset=['path']).reset_index(drop=True)
 
         self.images = images_df
 
@@ -182,35 +198,17 @@ class DistillImageDataset(Dataset):
         split: str,
         img_size: int,
         teacher_map: Dict[str, torch.Tensor],
-        unique_only: bool = True,
         allowed_paths: Optional[Iterable[str]] = None,
         extra_image_roots: Optional[Sequence[str]] = None,
-        include_extra_images: bool = False,
     ) -> None:
         self.base = SingleImageDataset(
             root_dir=dataset_root,
             split=split,
             load_size=img_size,
-            unique_only=unique_only,
             extra_image_roots=extra_image_roots,
-            include_extra_images=include_extra_images,
         )
         self.teacher_map = teacher_map
-        allowed_set = set(allowed_paths) if allowed_paths is not None else None
-
-        indices: List[int] = []
-        if allowed_set is not None and len(allowed_set) == 0:
-            self.indices = []
-            return
-        for idx in range(len(self.base)):
-            row = self.base.images.iloc[idx]
-            path = row["path"]
-            if path not in self.teacher_map:
-                continue
-            if allowed_set is not None and row["role"] != "extra" and path not in allowed_set:
-                continue
-            indices.append(idx)
-        self.indices = indices
+        self.indices = _select_distill_indices(self.base.images, self.teacher_map, allowed_paths)
 
     def __len__(self) -> int:
         return len(self.indices)
