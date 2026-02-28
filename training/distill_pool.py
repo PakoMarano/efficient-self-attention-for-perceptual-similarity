@@ -31,6 +31,8 @@ def _build_teacher_map(embeddings: torch.Tensor, paths: List[str]) -> Dict[str, 
 
 
 def _prepare_for_loss(embeds: torch.Tensor) -> torch.Tensor:
+    # Unify representation shape across modes (CLS-only or token-grid outputs)
+    # so cosine distillation always compares 2D tensors [B, D].
     if embeds.ndim > 2:
         return embeds.reshape(embeds.shape[0], -1)
     return embeds
@@ -64,7 +66,6 @@ def _evaluate_similarity(
     dataloader: DataLoader,
     model: nn.Module,
     device: str,
-    normalize_for_loss: bool,
     max_batches: Optional[int] = None,
 ) -> Dict[str, float]:
     model.eval()
@@ -87,10 +88,6 @@ def _evaluate_similarity(
                 student_embed = model.embed(imgs)
                 student_embed = _prepare_for_loss(student_embed)
                 teacher_embed = _prepare_for_loss(teacher_embed)
-
-                if normalize_for_loss:
-                    student_embed = F.normalize(student_embed, dim=-1)
-                    teacher_embed = F.normalize(teacher_embed, dim=-1)
 
                 target = torch.ones(student_embed.shape[0], device=device)
                 loss = loss_fn(student_embed, teacher_embed, target)
@@ -171,7 +168,6 @@ def run_distillation(
     weight_decay: float = 0.0,
     max_batches: Optional[int] = None,
     val_max_batches: Optional[int] = None,
-    normalize_for_loss: bool = False,
     save_every: int = 1,
     eval_2afc_every: int = 0,
     eval_2afc_split: str = "val",
@@ -181,6 +177,7 @@ def run_distillation(
     teacher_embeds, teacher_paths, teacher_cfg = _load_teacher_embeddings(teacher_embeddings)
     teacher_map = _build_teacher_map(teacher_embeds, teacher_paths)
 
+    # Runtime args take precedence; otherwise reuse teacher-embedding config.
     dataset_root = dataset_root or teacher_cfg.get("dataset_root", "./nights")
     img_size = img_size or teacher_cfg.get("img_size", 224)
     train_split = train_split or "train"
@@ -309,10 +306,6 @@ def run_distillation(
                 student_embed = _prepare_for_loss(student_embed)
                 teacher_embed = _prepare_for_loss(teacher_embed)
 
-                if normalize_for_loss:
-                    student_embed = F.normalize(student_embed, dim=-1)
-                    teacher_embed = F.normalize(teacher_embed, dim=-1)
-
                 target = torch.ones(student_embed.shape[0], device=device)
                 loss = loss_fn(student_embed, teacher_embed, target)
 
@@ -332,7 +325,6 @@ def run_distillation(
             dataloader=val_loader,
             model=model,
             device=device,
-            normalize_for_loss=normalize_for_loss,
             max_batches=val_max_batches,
         )
 
@@ -347,7 +339,6 @@ def run_distillation(
             "val_cosine": round(val_metrics["val_cosine"], 6),
             "val_samples": int(val_metrics["val_samples"]),
             "attention_module": "pool",
-            "normalize_for_loss": normalize_for_loss,
             "batch_size": batch_size,
             "num_workers": num_workers,
             "img_size": img_size,
@@ -362,6 +353,7 @@ def run_distillation(
         }
 
         if eval_2afc_every > 0 and (epoch % eval_2afc_every == 0):
+            # Optional periodic 2AFC evaluation; batch cap follows global max_batches.
             eval_dataset = TwoAFCDataset(
                 root_dir=dataset_root,
                 split=eval_2afc_split,
@@ -397,8 +389,9 @@ def run_distillation(
             f"samples={epoch_samples}"
         )
 
-        if avg_loss < best_loss:
-            best_loss = avg_loss
+        current_val_loss = float(val_metrics["val_loss"])
+        if current_val_loss < best_loss:
+            best_loss = current_val_loss
             best_path = os.path.join(output_dir, "pool_distill_best.pt")
             torch.save(
                 {
@@ -406,7 +399,7 @@ def run_distillation(
                     "optimizer_state_dict": optimizer.state_dict(),
                     "scaler_state_dict": scaler.state_dict(),
                     "epoch": epoch,
-                    "loss": avg_loss,
+                    "loss": current_val_loss,
                     "config": record,
                 },
                 best_path,
@@ -456,7 +449,6 @@ def parse_args():
     parser.add_argument("--weight_decay", type=float, default=0.0)
     parser.add_argument("--max_batches", type=int, default=None)
     parser.add_argument("--val_max_batches", type=int, default=None)
-    parser.add_argument("--normalize_for_loss", action="store_true")
     parser.add_argument("--no_pretrained", action="store_true")
     parser.add_argument("--no_normalize_embeds", action="store_true")
     parser.add_argument("--use_patch_model", action="store_true")
@@ -493,7 +485,6 @@ def main():
         weight_decay=args.weight_decay,
         max_batches=args.max_batches,
         val_max_batches=args.val_max_batches,
-        normalize_for_loss=args.normalize_for_loss,
         save_every=args.save_every,
         eval_2afc_every=args.eval_2afc_every,
         eval_2afc_split=args.eval_2afc_split,
