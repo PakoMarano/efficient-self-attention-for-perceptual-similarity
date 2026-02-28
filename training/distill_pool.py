@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 from dataset import DistillImageDataset, TwoAFCDataset, load_split_paths
 from model import dreamsim
-from utils import log_result
+from utils import log_result, resolve_amp_device
 
 
 def _load_teacher_embeddings(path: str) -> Tuple[torch.Tensor, List[str], Dict[str, Any]]:
@@ -73,8 +73,7 @@ def _evaluate_similarity(
     max_batches: Optional[int] = None,
 ) -> Dict[str, float]:
     model.eval()
-    use_cuda = device.startswith("cuda") and torch.cuda.is_available()
-    amp_device = "cuda" if use_cuda else "cpu"
+    use_cuda, amp_device = resolve_amp_device(device)
     loss_fn = nn.CosineEmbeddingLoss()
 
     total_loss = 0.0
@@ -122,8 +121,7 @@ def _evaluate_2afc(
     max_batches: Optional[int] = None,
 ) -> Dict[str, float]:
     model.eval()
-    use_cuda = device.startswith("cuda") and torch.cuda.is_available()
-    amp_device = "cuda" if use_cuda else "cpu"
+    use_cuda, amp_device = resolve_amp_device(device)
 
     correct = 0
     total = 0
@@ -265,8 +263,7 @@ def run_distillation(
 
     model.train()
 
-    use_cuda = device.startswith("cuda") and torch.cuda.is_available()
-    amp_device = "cuda" if use_cuda else "cpu"
+    use_cuda, amp_device = resolve_amp_device(device)
     scaler = torch.cuda.amp.GradScaler(enabled=use_cuda)
 
     optimizer = torch.optim.AdamW(

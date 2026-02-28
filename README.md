@@ -7,7 +7,7 @@ Master's thesis project on efficient self-attention mechanisms for perceptual im
 - Evaluate how efficient attention mechanisms can replace MHA in a transformer backbone for perceptual similarity.
 - Measure the trade-off between efficiency gains and accuracy loss for each efficient variant.
 - Compare theoretical efficiency gains with empirical runtime improvements.
-- Show how knowledge distillation on a MetaFormer-based architecture can recover a large portion of the lost accuracy.
+- Show how KD on a MetaFormer-based architecture can recover a large portion of the lost accuracy.
 - Propose a model that gets XX 2AFC accuracy on NIGHTS and is X times faster than DreamSim.
 
 ## Resources and Credits
@@ -73,7 +73,7 @@ python -m training.embedding --dataset_root ./nights --device cuda --extra_image
 Distill the pool attention model using teacher embeddings from the MHA (LoRA-finetuned DINO) model:
 
 ```bash
-python -m training.distill_pool --teacher_embeddings ./training/embeddings/nights.pt --train_split train --val_split val --epochs 50 --batch_size 32 --device cuda --eval_2afc_every 25 --eval_2afc_split val
+python -m training.distill_pool --teacher_embeddings ./training/embeddings/nights.pt --train_split train --val_split val --epochs 50 --batch_size 128 --num_workers 2 --device cuda --eval_2afc_every 10 --eval_2afc_split val
 ```
 
 Distill with extra ImageNet100 images in train split (val remains NIGHTS-only):

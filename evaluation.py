@@ -10,6 +10,7 @@ from dataset import TwoAFCDataset
 from model import dreamsim
 from model.efficient_modules import available_attention_modules
 from utils import log_result
+from utils import cap_max_samples, resolve_amp_device
 
 
 def _load_checkpoint(path: str) -> Dict[str, torch.Tensor]:
@@ -38,10 +39,8 @@ def create_dataloader(
 ) -> DataLoader:
     dataset = TwoAFCDataset(root_dir=dataset_root, split=split, load_size=img_size)
 
+    max_samples = cap_max_samples(max_samples, len(dataset))
     if max_samples is not None:
-        if max_samples <= 0:
-            raise ValueError("max_samples must be > 0 when provided.")
-        max_samples = min(max_samples, len(dataset))
         dataset = Subset(dataset, list(range(max_samples)))
 
     return DataLoader(
@@ -62,8 +61,7 @@ def eval_2afc(
 ):
     model.eval()
 
-    use_cuda = device.startswith("cuda") and torch.cuda.is_available()
-    amp_device = "cuda" if use_cuda else "cpu"
+    use_cuda, amp_device = resolve_amp_device(device)
 
     correct = 0
     total = 0

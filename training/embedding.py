@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader, Subset
 from dataset import SingleImageDataset
 from model.efficient_modules import available_attention_modules
 from model import dreamsim
+from utils import cap_max_samples, resolve_amp_device
 
 
 def create_single_image_dataloader(
@@ -25,10 +26,8 @@ def create_single_image_dataloader(
         extra_image_roots=extra_image_roots,
     )
 
+    max_samples = cap_max_samples(max_samples, len(dataset))
     if max_samples is not None:
-        if max_samples <= 0:
-            raise ValueError("max_samples must be > 0 when provided.")
-        max_samples = min(max_samples, len(dataset))
         dataset = Subset(dataset, list(range(max_samples)))
 
     return DataLoader(
@@ -71,8 +70,7 @@ def extract_embeddings(
     model.eval()
     embed_fn = _resolve_embed_fn(model)
 
-    use_cuda = device.startswith("cuda") and torch.cuda.is_available()
-    amp_device = "cuda" if use_cuda else "cpu"
+    use_cuda, amp_device = resolve_amp_device(device)
 
     measured_batches = 0
 
