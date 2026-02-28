@@ -134,7 +134,7 @@ def run_embedding_extraction(
     max_samples: Optional[int] = None,
     attention_module: str = "mha",
     extra_image_roots: Optional[Sequence[str]] = None,
-) -> Dict[str, Any]:
+) -> None:
     dataloader = create_single_image_dataloader(
         dataset_root=dataset_root,
         img_size=img_size,
@@ -184,28 +184,11 @@ def run_embedding_extraction(
     }
     torch.save(payload, output_path)
 
-    record = {
-        "attention_module": attention_module,
-        "device": device,
-        "batch_size": batch_size,
-        "num_workers": num_workers,
-        "img_size": img_size,
-        "use_patch_model": use_patch_model,
-        "normalize_embeds": normalize_embeds,
-        "pretrained": pretrained,
-        "extra_image_roots": "|".join(extra_image_roots) if extra_image_roots else "",
-        "output_path": output_path,
-        "samples": extraction["samples"],
-        "batches": extraction["batches"],
-    }
-
     print(
         f"attention_module={attention_module}: "
         f"saved={output_path}, "
         f"samples={extraction['samples']}"
     )
-
-    return record
 
 
 def parse_args():
