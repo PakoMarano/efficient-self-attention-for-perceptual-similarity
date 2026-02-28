@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import warnings
 
 
 class SRAAttention(nn.Module):
@@ -27,6 +28,8 @@ class SRAAttention(nn.Module):
         self.attn_drop = original_attention.attn_drop
         self.proj = original_attention.proj
         self.proj_drop = original_attention.proj_drop
+        self._fallback_count = 0
+        self._fallback_warned = False
         
     def spatial_reduction(self, k, v):
         """
@@ -41,7 +44,19 @@ class SRAAttention(nn.Module):
         S = int(N ** 0.5)
         
         if S * S != N or S < self.reduction_ratio or (S % self.reduction_ratio != 0):
-            # Cannot reshape to square grid, return original
+            # Cannot reshape to a compatible square grid; skip reduction.
+            self._fallback_count += 1
+            if not self._fallback_warned:
+                warnings.warn(
+                    (
+                        "SRAAttention skipped spatial reduction because patch tokens are not "
+                        f"compatible with reduction_ratio={self.reduction_ratio} "
+                        f"(N={N}, inferred_side={S}). Using full-resolution K/V."
+                    ),
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                self._fallback_warned = True
             return k, v
         
         # Reshape to spatial grid: (B, H, S, S, D)
@@ -82,6 +97,10 @@ class SRAAttention(nn.Module):
         v_reduced = v_reduced.flatten(2, 3)
         
         return k_reduced, v_reduced
+
+    @property
+    def fallback_count(self) -> int:
+        return self._fallback_count
     
     def forward(self, x):
         """
@@ -133,7 +152,7 @@ def build_attention(original_attention: nn.Module, reduction_ratio: int = 2, **_
     
     Args:
         original_attention: The standard Attention module to replace
-        reduction_ratio: Spatial reduction factor (default: 2, compatible with 14x14 patches)
+        reduction_ratio: Spatial reduction factor
     Returns:
         SRAAttention module with copied parameters
     """
