@@ -7,8 +7,8 @@ Master's thesis project on efficient self-attention mechanisms for perceptual im
 - Evaluate how efficient attention mechanisms can replace MHA in a transformer backbone for perceptual similarity.
 - Measure the trade-off between efficiency gains and accuracy loss for each efficient variant.
 - Compare theoretical efficiency gains with empirical runtime improvements.
-- Show how knowledge distillation can recover a large portion of the lost accuracy.
-- Propose a model that gets XX 2AFC accuracy on NIGHTS and is X times faster then DreamSim. 
+- Show how knowledge distillation on a MetaFormer-based architecture can recover a large portion of the lost accuracy.
+- Propose a model that gets XX 2AFC accuracy on NIGHTS and is X times faster than DreamSim.
 
 ## Resources and Credits
 
@@ -59,13 +59,13 @@ python ./scripts/convert_imagenet100_from_parquet.py --dataset_root ./imagenet-1
 Extract embeddings on NIGHTS:
 
 ```bash
-python -m training.embedding --dataset_root ./nights --split all --device cuda --output_path ./training/embeddings/nights.pt
+python -m training.embedding --dataset_root ./nights --device cuda --output_path ./training/embeddings/nights.pt
 ```
 
 Extract embeddings on NIGHTS + ImageNet100:
 
 ```bash
-python -m training.embedding --dataset_root ./nights --split all --device cuda --extra_image_roots ./imagenet-100-images --output_path ./training/embeddings/nights_imagenet100.pt
+python -m training.embedding --dataset_root ./nights --device cuda --extra_image_roots ./imagenet-100-images --output_path ./training/embeddings/nights_imagenet100.pt
 ```
 
 ## Knowledge Distillation

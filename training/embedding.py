@@ -8,12 +8,10 @@ from torch.utils.data import DataLoader, Subset
 from dataset import SingleImageDataset
 from model.efficient_modules import available_attention_modules
 from model import dreamsim
-from utils import log_result
 
 
 def create_single_image_dataloader(
     dataset_root: str,
-    split: str = "all",
     img_size: int = 224,
     batch_size: int = 16,
     num_workers: int = 0,
@@ -22,7 +20,7 @@ def create_single_image_dataloader(
 ) -> DataLoader:
     dataset = SingleImageDataset(
         root_dir=dataset_root,
-        split=split,
+        split="all",
         load_size=img_size,
         extra_image_roots=extra_image_roots,
     )
@@ -125,7 +123,6 @@ def run_embedding_extraction(
     dataset_root: str,
     cache_dir: str,
     output_path: str,
-    split: str = "all",
     batch_size: int = 16,
     num_workers: int = 0,
     img_size: int = 224,
@@ -137,11 +134,9 @@ def run_embedding_extraction(
     max_samples: Optional[int] = None,
     attention_module: str = "mha",
     extra_image_roots: Optional[Sequence[str]] = None,
-    results_csv: str = "./reports/embedding_runs.csv",
 ) -> Dict[str, Any]:
     dataloader = create_single_image_dataloader(
         dataset_root=dataset_root,
-        split=split,
         img_size=img_size,
         batch_size=batch_size,
         num_workers=num_workers,
@@ -174,7 +169,6 @@ def run_embedding_extraction(
         "config": {
             "dataset_root": dataset_root,
             "cache_dir": cache_dir,
-            "split": split,
             "batch_size": batch_size,
             "num_workers": num_workers,
             "img_size": img_size,
@@ -191,7 +185,6 @@ def run_embedding_extraction(
     torch.save(payload, output_path)
 
     record = {
-        "split": split,
         "attention_module": attention_module,
         "device": device,
         "batch_size": batch_size,
@@ -200,17 +193,14 @@ def run_embedding_extraction(
         "use_patch_model": use_patch_model,
         "normalize_embeds": normalize_embeds,
         "pretrained": pretrained,
-        "max_batches": max_batches,
-        "max_samples": max_samples,
         "extra_image_roots": "|".join(extra_image_roots) if extra_image_roots else "",
         "output_path": output_path,
         "samples": extraction["samples"],
         "batches": extraction["batches"],
     }
-    log_result(results_csv, record)
 
     print(
-        f"split={split}, attention_module={attention_module}: "
+        f"attention_module={attention_module}: "
         f"saved={output_path}, "
         f"samples={extraction['samples']}"
     )
@@ -224,8 +214,6 @@ def parse_args():
     parser.add_argument("--dataset_root", type=str, default="./nights")
     parser.add_argument("--cache_dir", type=str, default="./models")
     parser.add_argument("--output_path", type=str, default="./training/embeddings/nights_embeddings.pt")
-    parser.add_argument("--results_csv", type=str, default="./reports/embedding_runs.csv")
-    parser.add_argument("--split", type=str, default="all")
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--img_size", type=int, default=224)
@@ -247,7 +235,6 @@ def main():
         dataset_root=args.dataset_root,
         cache_dir=args.cache_dir,
         output_path=args.output_path,
-        split=args.split,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         img_size=args.img_size,
@@ -259,7 +246,6 @@ def main():
         max_samples=args.max_samples,
         attention_module=args.attention_module,
         extra_image_roots=args.extra_image_roots,
-        results_csv=args.results_csv,
     )
 
 
