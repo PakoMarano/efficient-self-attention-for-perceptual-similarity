@@ -9,6 +9,18 @@ class PoolAttention(nn.Module):
     This module does not compute Q/K/V. It applies local average pooling to
     patch tokens and uses global average pooled patch content for the CLS token.
     The surrounding Transformer block applies the residual connection.
+
+        Note:
+        - CLS mixer output is derived from patch tokens (global average), not from
+            an attention interaction with CLS queries/keys.
+        - Because the ViT block adds residuals outside this module, effective CLS
+            update is: cls_{l+1} = cls_l + mean(patch_tokens_l).
+        - This is a practical ViT adaptation of pooling token mixers, not a strict
+            PoolFormer implementation (which does not use a CLS token).
+        - A more PoolFormer-faithful setup would use pooled patch tokens for final
+            representation and ignore CLS, but that would diverge from the current
+            DreamSim-style CLS-based pathway and break compatibility with existing
+            pretrained LoRA checkpoints used in this repo.
     """
 
     def __init__(self, kernel_size: int = 3):
