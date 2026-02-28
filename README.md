@@ -39,7 +39,7 @@ from timm.layers import trunc_normal_
 Run 2AFC evaluation on NIGHTS test split:
 
 ```bash
-python evaluation.py --dataset_root ./nights --split test --device cuda --attention_module benchmark
+python evaluation.py --dataset_root ./nights --split test --device cuda --attention_module mha
 ```
 
 Minimal toy example (CPU, runs in seconds):
@@ -70,7 +70,7 @@ python -m training.embedding --dataset_root ./nights --split all --device cuda -
 
 ## Knowledge Distillation
 
-Distill the pool attention model using teacher embeddings from the benchmark (LoRA-finetuned DINO) model:
+Distill the pool attention model using teacher embeddings from the MHA (LoRA-finetuned DINO) model:
 
 ```bash
 python -m training.distill_pool --teacher_embeddings ./training/embeddings/nights.pt --train_split train --val_split val --epochs 50 --batch_size 32 --device cuda --eval_2afc_every 25 --eval_2afc_split val

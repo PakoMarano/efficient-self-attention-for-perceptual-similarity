@@ -32,7 +32,7 @@ class ViTExtractor(nn.Module):
     """
 
     def __init__(self, model_type: str = 'dino_vitb16', stride: int = 4, load_dir: str = "./models",
-                 device: str = 'cuda', attention_module: str = "benchmark"):
+                 device: str = 'cuda', attention_module: str = "mha"):
         """
         :param model_type: A string specifying the type of model to extract from.
                           [dino_vits8 | dino_vits16 | dino_vitb8 | dino_vitb16 | vit_small_patch8_224 |

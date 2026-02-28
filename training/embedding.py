@@ -6,6 +6,7 @@ import torch
 from torch.utils.data import DataLoader, Subset
 
 from dataset import SingleImageDataset
+from model.efficient_modules import available_attention_modules
 from model import dreamsim
 from utils import log_result
 
@@ -134,7 +135,7 @@ def run_embedding_extraction(
     use_patch_model: bool = False,
     max_batches: Optional[int] = None,
     max_samples: Optional[int] = None,
-    attention_module: str = "benchmark",
+    attention_module: str = "mha",
     extra_image_roots: Optional[Sequence[str]] = None,
     results_csv: str = "./reports/embedding_runs.csv",
 ) -> Dict[str, Any]:
@@ -219,6 +220,7 @@ def run_embedding_extraction(
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Extract DreamSim embeddings for single NIGHTS images.")
+    attention_choices = list(available_attention_modules())
     parser.add_argument("--dataset_root", type=str, default="./nights")
     parser.add_argument("--cache_dir", type=str, default="./models")
     parser.add_argument("--output_path", type=str, default="./training/embeddings/nights_embeddings.pt")
@@ -230,7 +232,7 @@ def parse_args():
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--max_batches", type=int, default=None)
     parser.add_argument("--max_samples", type=int, default=None)
-    parser.add_argument("--attention_module", type=str, default="benchmark")
+    parser.add_argument("--attention_module", type=str, default="mha", choices=attention_choices)
     parser.add_argument("--extra_image_roots", type=str, nargs="*", default=None)
     parser.add_argument("--use_patch_model", action="store_true")
     parser.add_argument("--no_pretrained", action="store_true")

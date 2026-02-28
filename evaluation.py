@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader, Subset
 
 from dataset import TwoAFCDataset
 from model import dreamsim
+from model.efficient_modules import available_attention_modules
 from utils import log_result
 
 
@@ -146,7 +147,7 @@ def run_evaluation(
     warmup_batches: int = 10,
     max_batches: Optional[int] = None,
     max_samples: Optional[int] = None,
-    attention_module: str = "benchmark",
+    attention_module: str = "mha",
     results_csv: str = "./reports/results.csv",
     checkpoint_path: Optional[str] = None,
 ):
@@ -215,6 +216,7 @@ def run_evaluation(
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate DreamSim model on 2AFC dataset.")
+    attention_choices = list(available_attention_modules())
     parser.add_argument("--dataset_root", type=str, default="./nights")
     parser.add_argument("--cache_dir", type=str, default="./models")
     parser.add_argument("--results_csv", type=str, default="./reports/results.csv")
@@ -226,7 +228,7 @@ def parse_args():
     parser.add_argument("--warmup_batches", type=int, default=10)
     parser.add_argument("--max_batches", type=int, default=None)
     parser.add_argument("--max_samples", type=int, default=None)
-    parser.add_argument("--attention_module", type=str, default="benchmark")
+    parser.add_argument("--attention_module", type=str, default="mha", choices=attention_choices)
     parser.add_argument("--checkpoint_path", type=str, default=None)
     parser.add_argument("--use_patch_model", action="store_true")
     parser.add_argument("--no_pretrained", action="store_true")

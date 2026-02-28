@@ -2,7 +2,7 @@ from typing import Callable, Dict, Iterable
 
 from torch import nn
 
-from .benchmark import build_attention as build_benchmark_attention
+from .mha import build_attention as build_mha_attention
 from .moh import build_attention as build_moh_attention
 from .pool import build_attention as build_pool_attention
 from .soft import build_attention as build_soft_attention
@@ -14,7 +14,7 @@ AttentionBuilder = Callable[..., nn.Module]
 # Static built-in attention builders used by this project.
 # Runtime registration is intentionally not exposed.
 _ATTENTION_REGISTRY: Dict[str, AttentionBuilder] = {
-    "benchmark": build_benchmark_attention,
+    "mha": build_mha_attention,
     "moh": build_moh_attention,
     "pool": build_pool_attention,
     "soft": build_soft_attention,

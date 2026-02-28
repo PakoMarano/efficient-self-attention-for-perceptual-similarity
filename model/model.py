@@ -17,7 +17,7 @@ from .efficient_modules import validate_attention_module
 class PerceptualModel(torch.nn.Module):
     def __init__(self, model_type: str = "dino_vitb16", feat_type: str = "cls", stride: int = 16,
                  load_dir: str = "./models", normalize_embeds: bool = False,
-                 device: str = "cuda", attention_module: str = "benchmark"):
+                 device: str = "cuda", attention_module: str = "mha"):
         """ Initializes a perceptual model that returns the perceptual distance between two image tensors.
         Extracts features from a DINO ViT-B/16 model.
 
@@ -30,7 +30,7 @@ class PerceptualModel(torch.nn.Module):
         :param load_dir: Path to pretrained ViT checkpoints.
         :param normalize_embeds: If True, normalizes embeddings (i.e. divides by norm and subtracts mean).
         :param device: Device for model (e.g., 'cuda' or 'cpu').
-        :param attention_module: Attention backend for ViT blocks. 'benchmark' keeps standard MHA.
+        :param attention_module: Attention backend for ViT blocks. 'mha' keeps standard MHA.
         """
         super().__init__()
         assert model_type == "dino_vitb16", f"Only dino_vitb16 is supported, got {model_type}"
@@ -134,7 +134,7 @@ class PerceptualModel(torch.nn.Module):
         return transforms.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)(img)
 
 
-def download_weights(cache_dir, use_patch_model=False, attention_module: str = "benchmark"):
+def download_weights(cache_dir, use_patch_model=False, attention_module: str = "mha"):
     """
     Downloads and unzips DreamSim weights for dino_vitb16.
     
@@ -170,7 +170,7 @@ def download_weights(cache_dir, use_patch_model=False, attention_module: str = "
 
 
 def dreamsim(pretrained: bool = True, device="cuda", cache_dir="./models", normalize_embeds: bool = True,
-             use_patch_model: bool = False, attention_module: str = "benchmark"):
+             use_patch_model: bool = False, attention_module: str = "mha"):
     """ Initializes the DreamSim model with dino_vitb16 backbone. When first called, downloads/caches model weights.
 
     :param pretrained: If True, downloads and loads DreamSim weights.
@@ -178,7 +178,7 @@ def dreamsim(pretrained: bool = True, device="cuda", cache_dir="./models", norma
     :param cache_dir: Location for downloaded weights.
     :param normalize_embeds: If True, normalizes embeddings (i.e. divides by norm and subtracts mean).
     :param use_patch_model: If True, uses model trained with CLS and patch features, otherwise just CLS.
-    :param attention_module: Attention backend for ViT blocks. 'benchmark' keeps standard MHA.
+    :param attention_module: Attention backend for ViT blocks. 'mha' keeps standard MHA.
     :return:
         - PerceptualModel with DreamSim settings and weights.
         - Preprocessing function that converts a PIL image to a (1, 3, 224, 224) tensor with values [0-1].
