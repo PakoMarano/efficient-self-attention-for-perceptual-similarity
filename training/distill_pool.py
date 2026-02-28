@@ -36,27 +36,22 @@ def _prepare_for_loss(embeds: torch.Tensor) -> torch.Tensor:
     return embeds
 
 
-def _set_trainable_params(
-    model: nn.Module, train_mlp: bool = True, train_norm: bool = True
-) -> int:
+def _set_trainable_params(model: nn.Module) -> int:
     model.requires_grad_(False)
 
     vit = model.extractor.model
     trainable = 0
 
     for block in vit.blocks:
-        if train_mlp:
-            for param in block.mlp.parameters():
-                param.requires_grad = True
-        if train_norm:
-            for param in block.norm1.parameters():
-                param.requires_grad = True
-            for param in block.norm2.parameters():
-                param.requires_grad = True
-
-    if train_norm:
-        for param in vit.norm.parameters():
+        for param in block.mlp.parameters():
             param.requires_grad = True
+        for param in block.norm1.parameters():
+            param.requires_grad = True
+        for param in block.norm2.parameters():
+            param.requires_grad = True
+
+    for param in vit.norm.parameters():
+        param.requires_grad = True
 
     for param in model.parameters():
         if param.requires_grad:
@@ -177,14 +172,10 @@ def run_distillation(
     max_batches: Optional[int] = None,
     val_max_batches: Optional[int] = None,
     normalize_for_loss: bool = False,
-    train_mlp: bool = True,
-    train_norm: bool = True,
     save_every: int = 1,
     eval_2afc_every: int = 0,
     eval_2afc_split: str = "val",
     eval_2afc_batch_size: int = 16,
-    eval_2afc_num_workers: int = 0,
-    eval_2afc_max_batches: Optional[int] = None,
     resume_checkpoint: Optional[str] = None,
 ) -> Dict[str, Any]:
     teacher_embeds, teacher_paths, teacher_cfg = _load_teacher_embeddings(teacher_embeddings)
@@ -257,9 +248,9 @@ def run_distillation(
         resume_state = resume_payload.get("state_dict", resume_payload)
         model.load_state_dict(resume_state)
 
-    trainable_params = _set_trainable_params(model, train_mlp=train_mlp, train_norm=train_norm)
+    trainable_params = _set_trainable_params(model)
     if trainable_params == 0:
-        raise ValueError("No trainable parameters selected. Enable MLP and/or LayerNorm.")
+        raise ValueError("No trainable parameters selected.")
 
     model.train()
 
@@ -365,8 +356,6 @@ def run_distillation(
             "normalize_embeds": normalize_embeds,
             "use_patch_model": use_patch_model,
             "extra_image_roots": "|".join(extra_image_roots) if extra_image_roots else "",
-            "train_mlp": train_mlp,
-            "train_norm": train_norm,
             "teacher_embeddings": teacher_embeddings,
             "lr": lr,
             "weight_decay": weight_decay,
@@ -382,14 +371,14 @@ def run_distillation(
                 eval_dataset,
                 batch_size=eval_2afc_batch_size,
                 shuffle=False,
-                num_workers=eval_2afc_num_workers,
+                num_workers=num_workers,
                 pin_memory=torch.cuda.is_available(),
             )
             eval_metrics = _evaluate_2afc(
                 dataloader=eval_loader,
                 model=model,
                 device=device,
-                max_batches=eval_2afc_max_batches,
+                max_batches=max_batches,
             )
             record.update(
                 {
@@ -472,14 +461,10 @@ def parse_args():
     parser.add_argument("--no_normalize_embeds", action="store_true")
     parser.add_argument("--use_patch_model", action="store_true")
     parser.add_argument("--extra_image_roots", type=str, nargs="*", default=None)
-    parser.add_argument("--no_train_mlp", action="store_true")
-    parser.add_argument("--no_train_norm", action="store_true")
     parser.add_argument("--save_every", type=int, default=1)
     parser.add_argument("--eval_2afc_every", type=int, default=0)
     parser.add_argument("--eval_2afc_split", type=str, default="val")
     parser.add_argument("--eval_2afc_batch_size", type=int, default=16)
-    parser.add_argument("--eval_2afc_num_workers", type=int, default=0)
-    parser.add_argument("--eval_2afc_max_batches", type=int, default=None)
     parser.add_argument("--resume_checkpoint", type=str, default=None)
     return parser.parse_args()
 
@@ -509,14 +494,10 @@ def main():
         max_batches=args.max_batches,
         val_max_batches=args.val_max_batches,
         normalize_for_loss=args.normalize_for_loss,
-        train_mlp=not args.no_train_mlp,
-        train_norm=not args.no_train_norm,
         save_every=args.save_every,
         eval_2afc_every=args.eval_2afc_every,
         eval_2afc_split=args.eval_2afc_split,
         eval_2afc_batch_size=args.eval_2afc_batch_size,
-        eval_2afc_num_workers=args.eval_2afc_num_workers,
-        eval_2afc_max_batches=args.eval_2afc_max_batches,
         resume_checkpoint=args.resume_checkpoint,
     )
 
