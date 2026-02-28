@@ -13,6 +13,9 @@ from ..efficient_modules import apply_attention_module, validate_attention_modul
 """
 Simplified extractor for DINO ViT-B/16 only.
 Based on https://github.com/ShirAmir/dino-vit-features.
+
+Note: the ViT backbone is loaded from torch.hub (facebookresearch/dino).
+This module imports local DINOHead only for projection-head construction.
 """
 
 
@@ -69,7 +72,7 @@ class ViTExtractor(nn.Module):
         if model_type != 'dino_vitb16':
             raise ValueError(f"Only 'dino_vitb16' is supported, got '{model_type}'")
         
-        # Load DINO ViT-B/16 from torch hub
+        # Backbone comes from torch.hub, not from local vision_transformer.VisionTransformer.
         torch.hub.set_dir(load_dir)
         model = torch.hub.load('facebookresearch/dino:main', model_type)
         
@@ -80,7 +83,7 @@ class ViTExtractor(nn.Module):
             weights_only=True
         )
         
-        # Create and initialize projection head
+        # Projection head is instantiated locally from vision_transformer.DINOHead.
         proj = DINOHead(768, 2048)
         proj.mlp[0].weight.data = sd['student']['module.head.mlp.0.weight']
         proj.mlp[0].bias.data = sd['student']['module.head.mlp.0.bias']
