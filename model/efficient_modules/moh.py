@@ -14,7 +14,7 @@ class MoHAttention(nn.Module):
         """
         Args:
             original_attention: The original Attention module to copy parameters from
-            topk_heads: Number of heads to keep (default: 4 out of 12)
+            topk_heads: Number of heads to keep
         """
         super().__init__()
         if topk_heads <= 0:
@@ -121,7 +121,7 @@ def build_attention(original_attention: nn.Module, topk_heads: int = 4, **_kwarg
     
     Args:
         original_attention: The standard Attention module to replace
-        topk_heads: Number of heads to keep active (default: 4 out of 12)
+        topk_heads: Number of heads to keep active
     Returns:
         MoHAttention module with copied parameters
     """
