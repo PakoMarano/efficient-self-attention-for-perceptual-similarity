@@ -17,6 +17,9 @@ class PoolAttention(nn.Module):
             update is: cls_{l+1} = cls_l + mean(patch_tokens_l).
         - This is a practical ViT adaptation of pooling token mixers, not a strict
             PoolFormer implementation (which does not use a CLS token).
+        - Another possible adaptation is a delta mixer output (pool(x) - x), but
+            this implementation intentionally returns pooled updates directly to
+            preserve current DreamSim-compatible behavior.
         - A more PoolFormer-faithful setup would use pooled patch tokens for final
             representation and ignore CLS, but that would diverge from the current
             DreamSim-style CLS-based pathway and break compatibility with existing
