@@ -11,6 +11,8 @@ from .sra import build_attention as build_sra_attention
 AttentionBuilder = Callable[..., nn.Module]
 
 
+# Static built-in attention builders used by this project.
+# Runtime registration is intentionally not exposed.
 _ATTENTION_REGISTRY: Dict[str, AttentionBuilder] = {
     "benchmark": build_benchmark_attention,
     "moh": build_moh_attention,
@@ -18,15 +20,6 @@ _ATTENTION_REGISTRY: Dict[str, AttentionBuilder] = {
     "soft": build_soft_attention,
     "sra": build_sra_attention,
 }
-
-
-def register_attention_module(name: str, builder: AttentionBuilder, overwrite: bool = False) -> None:
-    normalized = name.strip().lower()
-    if not normalized:
-        raise ValueError("Attention module name must be non-empty.")
-    if not overwrite and normalized in _ATTENTION_REGISTRY:
-        raise ValueError(f"Attention module '{normalized}' is already registered.")
-    _ATTENTION_REGISTRY[normalized] = builder
 
 
 def available_attention_modules() -> Iterable[str]:
