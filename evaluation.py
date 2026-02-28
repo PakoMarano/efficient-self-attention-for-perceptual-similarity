@@ -1,7 +1,7 @@
 import argparse
 import os
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Dict, Optional
 
 import torch
 from torch.utils.data import DataLoader, Subset
@@ -11,7 +11,7 @@ from model import dreamsim
 from utils import log_result
 
 
-def _load_checkpoint(path: str) -> Tuple[Dict[str, torch.Tensor], Dict[str, Any]]:
+def _load_checkpoint(path: str) -> Dict[str, torch.Tensor]:
     if not os.path.exists(path):
         raise FileNotFoundError(f"Checkpoint not found: {path}")
 
@@ -19,14 +19,12 @@ def _load_checkpoint(path: str) -> Tuple[Dict[str, torch.Tensor], Dict[str, Any]
 
     if isinstance(payload, dict) and "state_dict" in payload:
         state_dict = payload["state_dict"]
-        config = payload.get("config", {})
     elif isinstance(payload, dict):
         state_dict = payload
-        config = {}
     else:
         raise ValueError("Unsupported checkpoint format. Expected dict or dict with 'state_dict'.")
 
-    return state_dict, config
+    return state_dict
 
 
 def create_dataloader(
@@ -131,7 +129,6 @@ def eval_2afc(
         "samples": total,
         "batches": measured_batches,
         "warmup_batches": min(warmup_batches, len(dataloader)),
-        "timed_seconds": model_time,
     }
 
 
@@ -155,7 +152,7 @@ def run_evaluation(
 ):
     ckpt_state_dict: Optional[Dict[str, torch.Tensor]] = None
     if checkpoint_path is not None:
-        ckpt_state_dict, _ = _load_checkpoint(checkpoint_path)
+        ckpt_state_dict = _load_checkpoint(checkpoint_path)
 
     dataloader = create_dataloader(
         dataset_root=dataset_root,
@@ -196,15 +193,12 @@ def run_evaluation(
         "use_patch_model": use_patch_model,
         "normalize_embeds": normalize_embeds,
         "pretrained": pretrained,
-        "max_batches": max_batches,
-        "max_samples": max_samples,
         "accuracy_2afc": round(metrics["accuracy_2afc"], 6),
         "img_per_sec": round(metrics["img_per_sec"], 3),
         "max_mem_mb": round(metrics["max_mem_mb"], 3),
         "samples": metrics["samples"],
         "batches": metrics["batches"],
         "warmup_batches": metrics["warmup_batches"],
-        "timed_seconds": round(metrics["timed_seconds"], 6),
         "checkpoint_path": checkpoint_path,
     }
     log_result(results_csv, record)
