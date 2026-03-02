@@ -8,7 +8,7 @@ Master's thesis project on efficient self-attention mechanisms for perceptual im
 - Measure the trade-off between efficiency gains and accuracy loss for each efficient variant.
 - Compare theoretical efficiency gains with empirical runtime improvements.
 - Show how KD on a MetaFormer-based architecture can recover a large portion of the lost accuracy.
-- Propose a model that gets XX 2AFC accuracy on NIGHTS and is X times faster than DreamSim.
+- Propose a model that gets 90% 2AFC accuracy on NIGHTS and is 50% faster than DINO.
 
 ## Resources and Credits
 
